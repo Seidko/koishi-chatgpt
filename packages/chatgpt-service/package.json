@@ -1,0 +1,62 @@
+{
+  "name": "@seidko/koishi-plugin-chatgpt-service",
+  "description": "gpt abstract core",
+  "version": "0.0.1",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "author": "Seidko <seidko.coding@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seidko/koishi-chatgpt.git",
+    "directory": "package/chatgpt-service"
+  },
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/Seidko/koishi-chatgpt/issues"
+  },
+  "scripts": {
+    "build": "atsc -b"
+  },
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "service",
+    "chatgpt",
+    "gpt"
+  ],
+  "devDependencies": {
+    "koishi": "^4.12.0",
+    "@types/uuid": "^9.0.1",
+    "puppeteer-core": "^19.7.5",
+    "koishi-plugin-puppeteer": "^3.4.11",
+    "koishi-plugin-cache-memory": "^1.0.2",
+    "atsc": "^1.2.2"
+  },
+  "peerDependencies": {
+    "koishi": "^4.12.0"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0",
+    "@seidko/gpt-core": "^0.0.1"
+  },
+  "koishi": {
+    "description": {
+      "en": "Service of ChatGPT API",
+      "zh": "ChatGPT 的基础服务"
+    },
+    "service": {
+      "required": [
+        "puppeteer",
+        "cache"
+      ],
+      "implements": [
+        "gpt"
+      ]
+    }
+  }
+}

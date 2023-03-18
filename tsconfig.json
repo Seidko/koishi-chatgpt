@@ -3,8 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@koishijs/gpt": ["packages/core/src"],
+      "@koishijs/plugin-gpt": ["packages/core/src"],
       "koishi-plugin-*": ["packages/*/src"],
     },
-  }
+  },
 }

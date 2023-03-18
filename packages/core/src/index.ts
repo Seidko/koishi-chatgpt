@@ -1,26 +1,37 @@
-import { Session, Service } from 'koishi'
+import { Service } from 'koishi'
 
-export type Awaitable<T> = Promise<T> | T
+declare module 'koishi' {
+  interface Context {
+    gpt: GptService
+  }
+}
 
-export interface PromptOptions {
-  uuid?: string  // conversation uuid
-  ephemeral?: boolean // is a one-time conversation? default is true
+export type PromptOptions = {
+  persistent?: false
+} | {
+  id: string  // conversation uuid
+  persistent: true // is a one-time conversation? default is true
 }
 
 export interface Answer {
-  uuid: string
-  text: string
-  dispose: () => Awaitable<void>
+  id: string
+  message: string
+  clear(): Promise<void>
+}
+
+export interface Message {
+  message: string
+  id: string
+  role: 'user' | 'gpt'
+}
+
+export interface Conversation {
+  messages: Message[]
+  expire?: Date | number // mark the time to be expired
 }
 
 export abstract class GptService extends Service {
-  abstract ask(session: Session, prompt: string, options?: PromptOptions): Promise<Answer>
-  abstract reset(session: Session): Promise<boolean>
-  abstract query(session: Session): Promise<ConversationCache> 
-}
-
-export interface ConversationCache {
-  uuid: string
-  lastMessageUuid: string
-  expire?: Date | number // mark the time to be expired
+  abstract ask(prompt: string, options?: PromptOptions): Promise<Answer>
+  abstract clear(id: string): Promise<boolean>
+  abstract query(id: string): Promise<Conversation> 
 }

@@ -6,7 +6,7 @@
       "packages/*",
       "packages/@*/*"
     ],
-    "license": "MIT",
+    "license": "AGPL",
     "scripts": {
       "build": "yakumo build",
       "bump": "yakumo version",
