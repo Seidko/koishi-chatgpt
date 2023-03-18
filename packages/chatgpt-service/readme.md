@@ -1,5 +1,5 @@
-# koishi-plugin-chatgpt
+# koishi-plugin-chatgpt-service
 
-[![npm](https://img.shields.io/npm/v/koishi-plugin-chatgpt?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-chatgpt)
+[![npm](https://img.shields.io/npm/v/@seidko/koishi-plugin-chatgpt-service?style=flat-square)](https://www.npmjs.com/package/@seidko/koishi-plugin-chatgpt-service)
 
-chatgpt bot with free api
+Koishi ChatGPT unify service implement.

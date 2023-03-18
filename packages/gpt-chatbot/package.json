@@ -24,7 +24,9 @@
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "chatgpt",
+    "gpt"
   ],
   "devDependencies": {
     "@seidko/gpt-core": "^0.0.1",
