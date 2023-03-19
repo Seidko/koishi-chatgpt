@@ -9,7 +9,7 @@ declare module 'koishi' {
 export type PromptOptions = {
   persistent?: false
 } | {
-  id: string  // conversation uuid
+  id?: string  // conversation uuid
   persistent: true // is a one-time conversation? default is true
 }
 

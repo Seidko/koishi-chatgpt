@@ -1,15 +1,32 @@
 import { Schema, Context } from 'koishi'
-import {} from '@seidko/gpt-core'
+import { PromptOptions } from '@seidko/gpt-core'
+import {} from '@koishijs/cache'
 
-export const using = ['gpt'] as const
+declare module '@koishijs/cache' {
+  interface Tables {
+    'gpt-chatbot/conv': string
+  }
+}
+
+export const using = ['gpt', 'cache'] as const
 export const name = 'chatgpt'
 export interface Config {}
 export const Config: Schema<Config> = Schema.object({})
 
 export function apply(ctx: Context) {
-  ctx.command('gpt <prompt>')
-    .action(async ({ }, prompt) => {
-      const { message } = await ctx.gpt.ask(prompt)
+  const conv = ctx.cache('gpt-chatbot/conv')
+
+  ctx.command('ask <prompt:text>')
+    .action(async ({ session }, prompt) => {
+      const { message, id } = await ctx.gpt.ask(prompt, {
+        persistent: true,
+        id: await conv.get(session.uid)
+      })
+
+      await conv.set(session.uid, id)
       return message
     })
+
+  ctx.command('chat <prompt:text>')
+  .action((_, prompt) => ctx.gpt.ask(prompt).then(a => a.message))
 }

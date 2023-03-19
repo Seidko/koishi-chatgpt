@@ -1,6 +1,6 @@
 import { Answer, Conversation, GptService, PromptOptions } from '@seidko/gpt-core'
-import { Context, Schema, Logger } from 'koishi'
-import { v4 as uuid } from 'uuid'
+import { Context, Schema, Logger, SessionError } from 'koishi'
+import { v4 as uuid, validate } from 'uuid'
 import { Page } from 'puppeteer-core'
 import { CacheTable, Tables } from '@koishijs/cache'
 import { } from 'koishi-plugin-puppeteer'
@@ -20,8 +20,10 @@ class ChatGptService extends GptService {
 
   constructor(protected ctx: Context, protected config: ChatGptService.Config) {
     super(ctx, 'gpt')
+    ctx.i18n.define('zh', require('./locales/zh-CN.yml'))
     this.logger = ctx.logger('gpt')
     this.cookies = ctx.cache('chatgpt/cookies')
+    this.conv = ctx.cache('chatgpt/conversations')
   }
 
   protected async start(): Promise<void> {
@@ -63,11 +65,20 @@ class ChatGptService extends GptService {
       await this.cookies.set('access-token', accessToken, 60000)
     }
 
+    let conversation_id: string
+    let parent_message_id: string
+    const promptId = uuid()
+    if (options?.persistent) {
+      if (validate(options?.id)) conversation_id = options.id
+      parent_message_id = await this.conv.get(options?.id).then(c => c?.messages.at(-1).id)
+    }
+
     const body = {
       action: "next",
+      conversation_id,
       messages: [
         {
-          id: uuid(),
+          id: promptId,
           author: {
             role: "user"
           },
@@ -80,15 +91,14 @@ class ChatGptService extends GptService {
           }
         }
       ],
-      parent_message_id: uuid(),
+      parent_message_id: parent_message_id || uuid(),
       model: "text-davinci-002-render-sha"
     }
 
     const res = await this.page.evaluate((body, accessToken) => {
-      return new Promise(async (resolve: (value: string) => void) => {
-        let data: string
+      return new Promise(async (resolve: (value: string) => void, reject) => {
         const decoder = new TextDecoder()
-        const resp = await fetch('https://chat.openai.com/backend-api/conversation', {
+        const res = await fetch('https://chat.openai.com/backend-api/conversation', {
           method: 'POST',
           body: body,
           headers: {
@@ -98,42 +108,53 @@ class ChatGptService extends GptService {
           }
         })
 
-        resp.body.pipeTo(new WritableStream({
+        if (!res.ok) return reject(res.status)
+
+        let data: any
+        setTimeout(() => resolve(data), 2 * 60 * 1000)
+        res.body.pipeTo(new WritableStream({
           write(chunk) {
-            const raw = decoder.decode(chunk)
-            // console.log(raw, typeof raw)
-            if (raw.startsWith('data: [DONE]')) resolve(data.replace('data: ', ''))
-            data = raw
+            const chunks = decoder.decode(chunk).split('\n')
+            console.log('Receiving...')
+            for (const chunk of chunks) {
+              if (!chunk) continue
+              if (chunk.startsWith('data: [DONE]')) {
+                console.log('Done.')
+                return resolve(data)
+              }
+              try {
+                const raw = chunk.replace('data: ', '')
+                JSON.parse(raw)
+                data = raw
+              } catch {}
+            }
+            
           }
         }))
       })
-    }, JSON.stringify(body), accessToken).then(d => JSON.parse(d))
+    }, JSON.stringify(body), accessToken)
+      .then(r => JSON.parse(r))
+      .catch((e: Error) => {
+        if (e.message.includes('429')) throw new SessionError('error.gpt.too-many-requests')
+        throw e
+      })
 
-    const id: string = res.message.id
+    const convId: string = res.conversation_id
     const message: string = res.message.content.parts[0]
     if (options?.persistent) {
-      const conv = await this.conv.get(res.message.conversation_id)
-      conv.messages.push({ id, message, role: 'gpt' })
+      let conv = await this.conv.get(convId) || { messages: [] }
+      conv.messages.push(
+        { id: promptId, message: prompt, role: 'user' },
+        { id: res.message.id, message, role: 'gpt' },
+      )
+      await this.conv.set(convId, conv)
     }
 
     return {
-      id, message,
+      id: convId,
+      message,
       async clear() { },
     }
-    // if (Quester.isAxiosError(err)) {
-    //   switch (err.response?.status) {
-    //     case 401:
-    //       throw new SessionError('commands.chatgpt.messages.unauthorized')
-    //     case 404:
-    //       throw new SessionError('commands.chatgpt.messages.conversation-not-found')
-    //     case 429:
-    //       throw new SessionError('commands.chatgpt.messages.too-many-requests')
-    //     case 500:
-    //     case 503:
-    //       throw new SessionError('commands.chatgpt.messages.service-unavailable', [err.response.status])
-    //     default:
-    //       throw err
-    //   }
   }
 
   async clear(id: string): Promise<boolean> {
