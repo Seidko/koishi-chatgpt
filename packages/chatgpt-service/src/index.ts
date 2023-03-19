@@ -1,4 +1,4 @@
-import { Answer, Conversation, GptService, PromptOptions } from '@seidko/gpt-core'
+import { Answer, Conversation, GptService, PromptOptions, GptConfig } from '@seidko/gpt-core'
 import { Context, Schema, Logger, SessionError } from 'koishi'
 import { v4 as uuid, validate } from 'uuid'
 import { Page } from 'puppeteer-core'
@@ -56,21 +56,47 @@ class ChatGptService extends GptService {
     this.page = undefined
   }
 
-  async ask(prompt: string, options?: PromptOptions): Promise<Answer> {
+  protected async deleteConv(id: string) {
+    const accessToken = await this.accessToken()
+    if (!validate(id)) throw new Error('id is not an uuid.')
+    this.page.evaluate(async (id, accessToken) => {
+      await fetch(`https://chat.openai.com/backend-api/conversation/${id}`, {
+        method: 'PATCH',
+        body: '{"is_visible":false}',
+        headers: {
+          accept: '*/*',
+          'content-type': 'application/json',
+          authorization: `Bearer ${accessToken}`,
+        }
+      })
+    }, id, accessToken)
+  }
+
+  protected async accessToken(): Promise<string> {
     let accessToken = await this.cookies.get('access-token')
     if (!accessToken) {
-      ({ accessToken } = await this.page.evaluate(() => {
-        return fetch('https://chat.openai.com/api/auth/session').then(r => r.json())
-      }))
-      await this.cookies.set('access-token', accessToken, 60000)
+      accessToken = await this.page.evaluate(() => {
+        return fetch('https://chat.openai.com/api/auth/session')
+          .then(r => r.json())
+          .then(r => r.accessToken)
+      })
+      await this.cookies.set('access-token', accessToken, 60 * 60 * 1000)
     }
+
+    return accessToken
+  }
+
+  async ask(prompt: string, options?: PromptOptions): Promise<Answer> {
+    const accessToken = await this.accessToken()
 
     let conversation_id: string
     let parent_message_id: string
     const promptId = uuid()
-    if (options?.persistent) {
-      if (validate(options?.id)) conversation_id = options.id
-      parent_message_id = await this.conv.get(options?.id).then(c => c?.messages.at(-1).id)
+    if (options?.persistent && validate(options?.id)) {
+      conversation_id = options.id
+      const conv = await this.conv.get(options.id)
+      if (!conv) await this.clear(options.id)
+      parent_message_id = conv?.messages.at(-1).id
     }
 
     const body = {
@@ -126,9 +152,9 @@ class ChatGptService extends GptService {
                 const raw = chunk.replace('data: ', '')
                 JSON.parse(raw)
                 data = raw
-              } catch {}
+              } catch { }
             }
-            
+
           }
         }))
       })
@@ -148,17 +174,22 @@ class ChatGptService extends GptService {
         { id: res.message.id, message, role: 'gpt' },
       )
       await this.conv.set(convId, conv)
+    } else {
+      await this.deleteConv(convId)
     }
 
+    let clear: Answer['clear']
+    if (options?.persistent) clear = () => this.ctx.gpt.clear(convId)
     return {
       id: convId,
       message,
-      async clear() { },
+      clear
     }
   }
 
-  async clear(id: string): Promise<boolean> {
-    return
+  async clear(id: string) {
+    await this.conv.delete(id)
+    await this.deleteConv(id)
   }
 
   async query(id: string): Promise<Conversation> {
@@ -167,8 +198,11 @@ class ChatGptService extends GptService {
 }
 
 namespace ChatGptService {
-  export interface Config { }
-  export const Config: Schema<Config> = Schema.object({})
+  export interface Config extends GptConfig { }
+
+  export const Config: Schema<Config> = Schema.intersect([
+    GptConfig,
+  ])
   export const using = ['puppeteer', 'cache'] as const
 }
 

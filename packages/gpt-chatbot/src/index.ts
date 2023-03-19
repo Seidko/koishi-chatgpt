@@ -16,7 +16,7 @@ export const Config: Schema<Config> = Schema.object({})
 export function apply(ctx: Context) {
   const conv = ctx.cache('gpt-chatbot/conv')
 
-  ctx.command('ask <prompt:text>')
+  ctx.command('chat <prompt:text>')
     .action(async ({ session }, prompt) => {
       const { message, id } = await ctx.gpt.ask(prompt, {
         persistent: true,
@@ -27,6 +27,6 @@ export function apply(ctx: Context) {
       return message
     })
 
-  ctx.command('chat <prompt:text>')
+  ctx.command('ask <prompt:text>')
   .action((_, prompt) => ctx.gpt.ask(prompt).then(a => a.message))
 }

@@ -1,4 +1,4 @@
-import { Service } from 'koishi'
+import { Service, Schema } from 'koishi'
 
 declare module 'koishi' {
   interface Context {
@@ -16,7 +16,7 @@ export type PromptOptions = {
 export interface Answer {
   id: string
   message: string
-  clear(): Promise<void>
+  clear?: () => Promise<void>
 }
 
 export interface Message {
@@ -32,6 +32,14 @@ export interface Conversation {
 
 export abstract class GptService extends Service {
   abstract ask(prompt: string, options?: PromptOptions): Promise<Answer>
-  abstract clear(id: string): Promise<boolean>
+  abstract clear(id: string): Promise<void>
   abstract query(id: string): Promise<Conversation> 
 }
+
+export interface GptConfig {
+  expire: number
+}
+
+export const GptConfig: Schema<GptConfig> = Schema.object({
+  expire: Schema.number().default(24 * 60).description('对话的过期时间，单位为分钟，标记为永久的对话不受影响'),
+}).description('GPT 设置')
