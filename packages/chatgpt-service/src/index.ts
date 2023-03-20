@@ -205,6 +205,7 @@ namespace ChatGptService {
   export const Config: Schema<Config> = Schema.intersect([
     GptConfig,
   ])
+
   export const using = ['puppeteer', 'cache'] as const
 }
 
