@@ -24,6 +24,7 @@ class ChatGptService extends GptService {
     this.logger = ctx.logger('gpt')
     this.cookies = ctx.cache('chatgpt/cookies')
     this.conv = ctx.cache('chatgpt/conversations')
+    this.config.expire = this.config.expire * 60 * 1000
   }
 
   protected async start(): Promise<void> {
@@ -168,22 +169,23 @@ class ChatGptService extends GptService {
     const convId: string = res.conversation_id
     const message: string = res.message.content.parts[0]
     if (options?.persistent) {
-      let conv = await this.conv.get(convId) || { messages: [] }
+      let conv: Conversation = await this.conv.get(convId) || { messages: [] }
       conv.messages.push(
         { id: promptId, message: prompt, role: 'user' },
         { id: res.message.id, message, role: 'gpt' },
       )
-      await this.conv.set(convId, conv)
+      conv.expire = Date.now() + this.config.expire
+      await this.conv.set(convId, conv, this.config.expire)
     } else {
       await this.deleteConv(convId)
     }
 
-    let clear: Answer['clear']
-    if (options?.persistent) clear = () => this.ctx.gpt.clear(convId)
+    let clear: () => Promise<void>
+    if (options?.persistent) clear = () => this.clear(convId)
     return {
       id: convId,
       message,
-      clear
+      clear,
     }
   }
 
@@ -193,7 +195,7 @@ class ChatGptService extends GptService {
   }
 
   async query(id: string): Promise<Conversation> {
-    return
+    return await this.conv.get(id)
   }
 }
 

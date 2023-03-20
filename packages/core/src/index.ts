@@ -27,7 +27,7 @@ export interface Message {
 
 export interface Conversation {
   messages: Message[]
-  expire?: Date | number // mark the time to be expired
+  expire?: number // mark the time to be expired
 }
 
 export abstract class GptService extends Service {
