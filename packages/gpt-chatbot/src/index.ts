@@ -1,5 +1,5 @@
 import { Schema, Context } from 'koishi'
-import { PromptOptions } from '@seidko/gpt-core'
+import {} from '@seidko/gpt-core'
 import {} from '@koishijs/cache'
 
 declare module '@koishijs/cache' {
