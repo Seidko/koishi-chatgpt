@@ -33,7 +33,7 @@ export abstract class GptService extends Service {
   static readonly isConv = Symbol('is-conversation')
   abstract clear(id: uuid): Promise<void>
   abstract query(id: uuid): Promise<Conversation>
-  abstract create(): Promise<Conversation>
+  abstract create(initialPrompt?: string): Promise<Conversation>
 }
 
 export interface GptConfig {

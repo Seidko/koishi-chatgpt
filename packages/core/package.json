@@ -1,7 +1,7 @@
 {
   "name": "@seidko/gpt-core",
   "description": "Unify koishi GPT service",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [

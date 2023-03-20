@@ -229,7 +229,7 @@ class ChatGptService extends GptService {
     await this.deleteConv(id)
   }
 
-  async create(initialPrompt: string = ''): Promise<Conversation> {
+  async create(initialPrompt = ''): Promise<Conversation> {
     return this.ask(initialPrompt)
   }
 
