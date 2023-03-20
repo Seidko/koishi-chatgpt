@@ -6,34 +6,34 @@ declare module 'koishi' {
   }
 }
 
-export type PromptOptions = {
-  persistent?: false
-} | {
-  id?: string  // conversation uuid
-  persistent: true // is a one-time conversation? default is true
-}
-
-export interface Answer {
-  id: string
-  message: string
-  clear?: () => Promise<void>
-}
+export type uuid = string
 
 export interface Message {
   message: string
-  id: string
-  role: 'user' | 'gpt'
+  id: uuid
+  parent?: uuid
+  children?: uuid[]
+  role: 'user' | 'gpt' | 'system'
 }
 
 export interface Conversation {
-  messages: Message[]
-  expire?: number // mark the time to be expired
+  readonly id?: uuid // static
+  readonly messages?: Record<string, Message> // static
+  readonly latestMessage?: Message
+  readonly expire?: number // static
+  ask?: (prompt: string, parent?: string) => Promise<Conversation>
+  edit?: (prompt: string) => Promise<Conversation>
+  retry?: () => Promise<Conversation>
+  continue?: () => Promise<Conversation>
+  clear?: () => Promise<void>
+  toJSON?: () => string
 }
 
 export abstract class GptService extends Service {
-  abstract ask(prompt: string, options?: PromptOptions): Promise<Answer>
-  abstract clear(id: string): Promise<void>
-  abstract query(id: string): Promise<Conversation> 
+  static readonly isConv = Symbol('is-conversation')
+  abstract clear(id: uuid): Promise<void>
+  abstract query(id: uuid): Promise<Conversation>
+  abstract create(): Promise<Conversation>
 }
 
 export interface GptConfig {

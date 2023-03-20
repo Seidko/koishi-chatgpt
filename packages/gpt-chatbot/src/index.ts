@@ -13,26 +13,23 @@ export const name = 'chatgpt'
 export interface Config {}
 export const Config: Schema<Config> = Schema.object({})
 
-export function apply(ctx: Context) {
-  const conv = ctx.cache('gpt-chatbot/conv')
+export async function apply(ctx: Context) {
+  const cache = ctx.cache('gpt-chatbot/conv')
+  const convId = await cache.get('conversation-id')
+  const conv = convId ? await ctx.gpt.query(convId) : await ctx.gpt.create()
 
   ctx.command('gpt.chat <prompt:text>')
     .action(async ({ session }, prompt) => {
-      const { message, id } = await ctx.gpt.ask(prompt, {
-        persistent: true,
-        id: await conv.get(session.uid)
-      })
-
-      await conv.set(session.uid, id)
+      const { latestMessage: { message, id } } = await conv.ask(prompt, await cache.get(session.uid))
+      await cache.set(session.uid, id)
       return message
     })
 
   ctx.command('gpt.ask <prompt:text>')
-  .action((_, prompt) => ctx.gpt.ask(prompt).then(a => a.message))
+  .action((_, prompt) => conv.ask(prompt).then(a => a.latestMessage.message))
 
   ctx.command('gpt.clear')
   .action(async ({ session }) => {
-    await ctx.gpt.clear(await conv.get(session.uid))
-    await conv.delete(session.uid)
+    await cache.delete(session.uid)
   })
 }
