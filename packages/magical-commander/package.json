@@ -1,0 +1,50 @@
+{
+  "name": "@seidko/koishi-plugin-magical-commander",
+  "private": true,
+  "description": "A magical plugin that make your bot magically have the ability to understand the commands in your Words!",
+  "version": "0.0.1",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "author": "Seidko <seidko.coding@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seidko/koishi-chatgpt.git",
+    "directory": "packages/magical-commander"
+  },
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/Seidko/koishi-chatgpt/issues"
+  },
+  "scripts": {
+    "build": "atsc -b"
+  },
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "chatgpt",
+    "gpt"
+  ],
+  "devDependencies": {
+    "@seidko/gpt-core": "^0.3.1",
+    "atsc": "^1.2.2"
+  },
+  "peerDependencies": {
+    "koishi": "^4.12.0"
+  },
+  "koishi": {
+    "description": {
+      "en": "A magical plugin that make your bot magically have the ability to understand the commands in your Words!",
+      "zh": "让你的机器人拥有神奇地理解你的话的能力神奇插件！"
+    },
+    "service": {
+      "required": [
+        "gpt"
+      ]
+    }
+  }
+}
