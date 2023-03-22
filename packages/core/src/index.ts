@@ -16,7 +16,16 @@ export interface Message {
   role: 'user' | 'gpt' | 'system'
 }
 
+export interface ConvOption {
+  initialPrompts?: string[] | string
+  expire?: number // undefined = ephemeral, negative value = permanent
+  model?: string
+}
+
+export type Action = 'next' | 'variant' | 'continue'
+
 export interface Conversation {
+  readonly model?: string
   readonly id?: uuid // static
   readonly messages?: Record<string, Message> // static
   readonly latestMessage?: Message
@@ -26,14 +35,14 @@ export interface Conversation {
   retry?: () => Promise<Conversation>
   continue?: () => Promise<Conversation>
   clear?: () => Promise<void>
-  toJSON?: () => string
+  save?: () => Promise<void>
 }
 
 export abstract class GptService extends Service {
   static readonly isConv = Symbol('is-conversation')
   abstract clear(id: uuid): Promise<void>
   abstract query(id: uuid): Promise<Conversation>
-  abstract create(initialPrompt?: string): Promise<Conversation>
+  abstract create(options: ConvOption): Promise<Conversation>
 }
 
 export interface GptConfig {

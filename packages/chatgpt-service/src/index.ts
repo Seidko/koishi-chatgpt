@@ -1,4 +1,4 @@
-import { Conversation, GptService, GptConfig, Message } from '@seidko/gpt-core'
+import { Conversation, GptService, GptConfig, Message, ConvOption, Action } from '@seidko/gpt-core'
 import { Context, Schema, Logger, SessionError, pick } from 'koishi'
 import { v4 as uuid, validate } from 'uuid'
 import { Page } from 'puppeteer-core'
@@ -10,6 +10,14 @@ declare module '@koishijs/cache' {
     'chatgpt/cookies': string
     'chatgpt/conversations': Conversation
   }
+}
+
+interface QuestionOptions {
+  conversation?: Conversation
+  prompt: string
+  parent?: string
+  action?: Action
+  model?: string
 }
 
 class ChatGptService extends GptService {
@@ -57,34 +65,53 @@ class ChatGptService extends GptService {
     this.page = undefined
   }
 
-  protected async buildConv(conv: Conversation, message?: Message): Promise<Conversation> {
-    const newConv: Conversation = Object.create(conv)
-    if (conv[GptService.isConv]) {
-      return Object.assign(newConv, message && { latestMessage: message })
+  protected async buildConv(oldConv: Conversation, message?: Message): Promise<Conversation> {
+    const conversation: Conversation = Object.create(oldConv)
+    if (oldConv[GptService.isConv]) {
+      return Object.assign(conversation, message && { latestMessage: message })
     }
 
-    newConv.ask = (prompt, parent) => this.ask(prompt, newConv, parent)
-    newConv.clear = () => this.clear(newConv.id)
-    newConv.retry = () => {
-      const { parent, message } = newConv.messages[newConv.latestMessage.parent]
-      return this.ask(message, newConv, parent, 'variant')
+    conversation.ask = (prompt, parent) => this.ask({
+      conversation,
+      prompt,
+      parent,
+    })
+    conversation.clear = () => this.clear(conversation.id)
+    conversation.retry = () => {
+      const { parent, message: prompt } = conversation.messages[conversation.latestMessage.parent]
+      return this.ask({
+        prompt,
+        action: 'variant',
+        parent,
+        conversation
+      })
     }
-    newConv.continue = () => {
-      const { parent, message } = newConv.messages[newConv.latestMessage.parent]
-      return this.ask(message, newConv, parent, 'continue')
+    conversation.continue = () => {
+      const { parent, message: prompt } = conversation.messages[conversation.latestMessage.parent]
+      return this.ask({
+        prompt,
+        conversation,
+        parent,
+        action: 'continue'
+      })
     }
-    newConv.edit = (prompt: string) => {
-      const { parent } = newConv.messages[newConv.latestMessage.parent]
-      return this.ask(prompt, newConv, parent, 'next')
+    conversation.edit = async (prompt: string) => {
+      const { parent } = conversation.messages[conversation.latestMessage.parent]
+      return await this.ask({
+        prompt,
+        conversation,
+        parent,
+        action: 'continue'
+      })
     }
 
-    newConv.toJSON = function() {
-      return JSON.stringify(pick(this, ['id', 'latestMessage', 'messages']))
+    conversation.save = async () => {
+      await this.conv.set(conversation.id, pick(conversation, ['id', 'latestMessage', 'messages']))
     }
 
-    newConv[ChatGptService.isConv] = true
+    conversation[ChatGptService.isConv] = true
 
-    return newConv
+    return conversation
   }
 
   protected async deleteConv(id: string) {
@@ -117,12 +144,9 @@ class ChatGptService extends GptService {
     return accessToken
   }
 
-  protected async ask(
-    prompt: string,
-    conversation?: Conversation,
-    parent?: string,
-    action: ChatGptService.Action = 'next',
-  ): Promise<Conversation> {
+  protected async ask(options: QuestionOptions): Promise<Conversation> {
+    let { conversation, parent } = options
+    const { action = 'next', model = 'text-davinci-002-render-sha', prompt } = options
     const accessToken = await this.accessToken()
     const userMessageId = uuid()
     parent = parent || conversation?.latestMessage.id || uuid()
@@ -146,7 +170,7 @@ class ChatGptService extends GptService {
         }
       ],
       parent_message_id: parent,
-      model: 'text-davinci-002-render-sha',
+      model,
     }
 
     const res = await this.page.evaluate((body, accessToken) => {
@@ -218,10 +242,8 @@ class ChatGptService extends GptService {
     conversation.messages[parent]?.children?.push(userMessageId)
     conversation.messages[userMessageId] = userMessage
     conversation.messages[res.message.id] = gptMessage
-    
-    await this.conv.set(conversation.id, conversation)
+
     return conversation
-    
   }
 
   async clear(id: string): Promise<void> {
@@ -229,8 +251,16 @@ class ChatGptService extends GptService {
     await this.deleteConv(id)
   }
 
-  async create(initialPrompt = ''): Promise<Conversation> {
-    return this.ask(initialPrompt)
+  async create(options: ConvOption): Promise<Conversation> {
+    let { expire, initialPrompts: prompts = [''], model } = options
+    if (!Array.isArray(prompts)) prompts = [prompts]
+    return prompts.reduce(async (previous: Promise<Conversation>, prompt) => {
+      return this.ask({
+        prompt,
+        conversation: await previous,
+        model,
+      })
+    }, Promise.resolve({ model, expire }))
   }
 
   async query(id: string): Promise<Conversation> {
@@ -239,8 +269,6 @@ class ChatGptService extends GptService {
 }
 
 namespace ChatGptService {
-  export type Action = 'next' | 'variant' | 'continue'
-
   export interface Config extends GptConfig { }
 
   export const Config: Schema<Config> = Schema.intersect([
