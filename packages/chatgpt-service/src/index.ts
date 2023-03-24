@@ -65,48 +65,41 @@ class ChatGptService extends GptService {
     this.page = undefined
   }
 
+  protected async save(conv: Conversation) {
+    const { id, expire } = conv
+    if (expire === null) return
+    await this.conv.set(id, pick(conv, ['id', 'latestMessage', 'messages', 'model']), expire && expire - Date.now())
+  }
+
   protected async buildConv(oldConv: Conversation, message?: Message): Promise<Conversation> {
     const conversation: Conversation = Object.create(oldConv)
     if (oldConv[GptService.isConv]) {
       return Object.assign(conversation, message && { latestMessage: message })
     }
 
-    conversation.ask = (prompt, parent) => this.ask({
-      conversation,
-      prompt,
-      parent,
-    })
     conversation.clear = () => this.clear(conversation.id)
-    conversation.retry = () => {
-      const { parent, message: prompt } = conversation.messages[conversation.latestMessage.parent]
-      return this.ask({
-        prompt,
-        action: 'variant',
-        parent,
-        conversation
-      })
+    conversation.ask = async (prompt, parent) => {
+      const conv = await this.ask({ conversation, prompt, parent })
+      await this.save(conv)
+      return conv
     }
-    conversation.continue = () => {
+    conversation.retry = async () => {
       const { parent, message: prompt } = conversation.messages[conversation.latestMessage.parent]
-      return this.ask({
-        prompt,
-        conversation,
-        parent,
-        action: 'continue'
-      })
+      const conv = await this.ask({ prompt, parent, conversation, action: 'variant' })
+      await this.save(conv)
+      return conv
+    }
+    conversation.continue = async () => {
+      const { parent, message: prompt } = conversation.messages[conversation.latestMessage.parent]
+      const conv = await this.ask({ prompt, conversation, parent, action: 'continue' })
+      await this.save(conv)
+      return conv
     }
     conversation.edit = async (prompt: string) => {
       const { parent } = conversation.messages[conversation.latestMessage.parent]
-      return await this.ask({
-        prompt,
-        conversation,
-        parent,
-        action: 'continue'
-      })
-    }
-
-    conversation.save = async () => {
-      await this.conv.set(conversation.id, pick(conversation, ['id', 'latestMessage', 'messages']))
+      const conv = await this.ask({ prompt, conversation, parent, action: 'continue' })
+      await this.save(conv)
+      return conv
     }
 
     conversation[ChatGptService.isConv] = true
@@ -149,7 +142,7 @@ class ChatGptService extends GptService {
     const { action = 'next', model = 'text-davinci-002-render-sha', prompt } = options
     const accessToken = await this.accessToken()
     const userMessageId = uuid()
-    parent = parent || conversation?.latestMessage.id || uuid()
+    parent = parent || conversation?.latestMessage?.id || uuid()
 
     const body = {
       action,
@@ -251,8 +244,8 @@ class ChatGptService extends GptService {
     await this.deleteConv(id)
   }
 
-  async create(options: ConvOption): Promise<Conversation> {
-    let { expire, initialPrompts: prompts = [''], model } = options
+  async create(options?: ConvOption): Promise<Conversation> {
+    let { expire, initialPrompts: prompts = [''], model } = options ?? {}
     if (!Array.isArray(prompts)) prompts = [prompts]
     return prompts.reduce(async (previous: Promise<Conversation>, prompt) => {
       return this.ask({

@@ -35,7 +35,6 @@
     "@types/uuid": "^9.0.1",
     "puppeteer-core": "^19.7.5",
     "koishi-plugin-puppeteer": "^3.4.11",
-    "koishi-plugin-cache-memory": "^1.0.2",
     "atsc": "^1.2.2"
   },
   "peerDependencies": {
@@ -52,7 +51,9 @@
     },
     "service": {
       "required": [
-        "puppeteer",
+        "puppeteer"
+      ],
+      "optional": [
         "cache"
       ],
       "implements": [

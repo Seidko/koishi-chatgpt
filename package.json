@@ -14,6 +14,7 @@
     "pub": "yakumo publish"
   },
   "devDependencies": {
+    "koishi-plugin-cache-database": "^1.0.3",
     "@types/node": "^18.15.3",
     "esbuild": "^0.17.12",
     "esbuild-register": "npm:@shigma/esbuild-register@^1.1.1",
