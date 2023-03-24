@@ -3,9 +3,7 @@ import { } from '@seidko/gpt-core'
 import { } from '@koishijs/cache'
 
 export const using = ['gpt'] as const
-export const name = 'chatgpt'
-export interface Config { }
-export const Config: Schema<Config> = Schema.object({})
+export const name = 'magical-commander'
 
 export async function apply(ctx: Context) {
   ctx.i18n.define('zh', require('./locales/zh-CN'))

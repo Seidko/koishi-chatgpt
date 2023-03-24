@@ -9,7 +9,7 @@ declare module '@koishijs/cache' {
 }
 
 export const using = ['gpt', 'cache'] as const
-export const name = 'chatgpt'
+export const name = 'gpt-chatbot'
 export interface Config {}
 export const Config: Schema<Config> = Schema.object({})
 
