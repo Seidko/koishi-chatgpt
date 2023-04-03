@@ -1,5 +1,5 @@
 {
-  "name": "@seidko/koishi-plugin-gpt-chatbot",
+  "name": "@seidko/koishi-plugin-ai-chatbot",
   "description": "Koishi GPT chatbot based on unify GPT service.",
   "version": "0.3.1",
   "main": "lib/index.js",
@@ -42,7 +42,7 @@
     },
     "service": {
       "required": [
-        "gpt",
+        "llm",
         "cache"
       ]
     }
