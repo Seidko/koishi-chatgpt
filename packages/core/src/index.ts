@@ -1,5 +1,4 @@
 import { Service, Schema } from 'koishi'
-import { type } from 'os'
 
 declare module 'koishi' {
   interface Context {
@@ -55,18 +54,13 @@ export interface LLMConfig {
 
 export const LLMConfig: Schema<LLMConfig> = Schema.intersect([
   Schema.object({
-    clear: Schema.boolean().default(false).description('是否在对话长时间不活跃后删除')
+    clear: Schema.boolean().default(false).description('是否在对话长时间不活跃后删除。')
   }).description('LLM 设置'),
   Schema.union([
-    Schema.object({
-      clear: Schema.union([
-        Schema.const(undefined).required(),
-        Schema.const(true).required(),
-      ]),
-    }),
     Schema.object({
       clear: Schema.const(true).required(),
       expire: Schema.number().default(1440).description('不活跃的对话的保存时间，单位为分钟。'),
     }),
+    Schema.object({}),
   ])
 ])

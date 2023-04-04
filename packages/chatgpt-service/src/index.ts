@@ -1,4 +1,4 @@
-import { Conversation, LLMService, LLMConfig, Message, ConvOption, Action, isConv } from '@seidko/llm-core'
+import { Conversation, LLMService, LLMConfig, ConvOption, Action, isConv } from '@seidko/llm-core'
 import { Context, Schema, Logger, SessionError, pick, Time } from 'koishi'
 import { v4 as uuid, validate } from 'uuid'
 import { CacheTable, Tables } from '@koishijs/cache'
