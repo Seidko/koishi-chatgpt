@@ -1,0 +1,4 @@
+error:
+  llm:
+    too-many-requests: 请求过多，请稍后重试！
+    authorize-failed: 验证过期，请重新登录

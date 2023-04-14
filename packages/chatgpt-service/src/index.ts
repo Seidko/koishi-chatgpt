@@ -1,48 +1,34 @@
-import { Conversation, LLMService, LLMConfig, ConvOption, Action, isConv } from '@seidko/llm-core'
-import { Context, Schema, Logger, SessionError, pick, Time } from 'koishi'
+import { Conversation, LLMImpl, LLMConfig, ConvOption, isConv } from '@seidko/llm-core'
+import { Context, Schema, SessionError, pick, Time } from 'koishi'
 import { v4 as uuid, validate } from 'uuid'
-import { CacheTable, Tables } from '@koishijs/cache'
-import { Page } from 'koishi-plugin-puppeteer'
+import type { Page } from 'koishi-plugin-puppeteer'
+import type { CacheTable, Tables } from '@koishijs/cache'
 
 declare module '@koishijs/cache' {
   interface Tables {
     'chatgpt/cookies': string
-    'chatgpt/conversations': Conversation
-  }
-}
-
-declare module '@seidko/llm-core' {
-  interface Conversation {
-    title?: (messageId: string) => Promise<string>
   }
 }
 
 interface QuestionOptions {
-  conversation?: Conversation
+  conversation: ChatGptConversation
   prompt: string
   parent?: string
-  action?: Action
-  model?: string
+  action?: 'next' | 'variant' | 'continue'
 }
 
 
-interface ChatGptConversation extends Conversation { }
+export interface ChatGptConversation extends Conversation {}
 
-type SerializableConv = Pick<Conversation, 'id' | 'expire' | 'latestId' | 'model' | 'messages'>
-
-class ChatGptConversation {
+export class ChatGptConversation {
   protected service: ChatGptService
-  constructor(conv: SerializableConv, service: ChatGptService) {
-    this.id = conv.id
-    this.service = service
-    this.model = conv.model
-    this.expire = conv.expire
-    this.messages = conv.messages
-    this.latestId = conv.latestId
+  constructor(conv: Partial<ChatGptConversation>, service: ChatGptService) {
+    Object.assign(this, conv)
+    this.messages ??= {}
     this[isConv] = true
   }
 
-  fork(newConv: Conversation): Conversation {
+  fork(newConv: Partial<ChatGptConversation>): ChatGptConversation {
     for (const k in newConv) {
       if (newConv[k] === undefined) delete newConv[k]
     }
@@ -74,39 +60,35 @@ class ChatGptConversation {
     await this.service.clear(this.id)
   }
 
-  async retry(): Promise<Conversation> {
+  async retry(): Promise<ChatGptConversation> {
     const { parent, message: prompt } = this.messages[this.messages[this.latestId].parent]
     return await this.service.ask({ prompt, parent, conversation: this, action: 'variant' })
   }
 
-  async continue(): Promise<Conversation> {
+  async continue(): Promise<ChatGptConversation> {
     const { parent, message: prompt } = this.messages[this.messages[this.latestId].parent]
     return await this.service.ask({ prompt, conversation: this, parent, action: 'continue' })
   }
 
-  async edit(prompt: string): Promise<Conversation> {
+  async edit(prompt: string): Promise<ChatGptConversation> {
     const { parent } = this.messages[this.messages[this.latestId].parent]
     return await this.service.ask({ prompt, conversation: this, parent, action: 'continue' })
   }
 
-  async ask(prompt: string, parent?: string): Promise<Conversation> {
+  async ask(prompt: string, parent?: string): Promise<ChatGptConversation> {
     return await this.service.ask({ conversation: this, prompt, parent })
   }
 
 }
 
-class ChatGptService extends LLMService {
-  protected logger: Logger
+class ChatGptService extends LLMImpl {
   cookies: CacheTable<Tables['chatgpt/cookies']>
-  conv: CacheTable<Tables['chatgpt/conversations']>
+  protected conv?: CacheTable<ChatGptConversation>
   page: Page
 
-  constructor(protected ctx: Context, protected config: ChatGptService.Config) {
-    super(ctx, 'llm')
-    ctx.i18n.define('zh', require('./locales/zh-CN.yml'))
-    this.logger = ctx.logger('chatgpt')
+  constructor(public ctx: Context, public config: ChatGptService.Config) {
+    super(ctx, 'chatgpt')
     this.cookies = ctx?.cache('chatgpt/cookies')
-    this.conv = ctx?.cache('chatgpt/conversations')
   }
 
   protected async start(): Promise<void> {
@@ -126,12 +108,14 @@ class ChatGptService extends LLMService {
     })
     await this.page.evaluateOnNewDocument(`Object.defineProperties(navigator, { webdriver:{ get: () => false } })`)
     await this.page.goto('https://chat.openai.com/chat')
-    await this.page.waitForResponse('https://chat.openai.com/api/auth/session', { timeout: 10 * Time.minute })
+    await this.page.waitForResponse(r => {
+      return r.url() === 'https://chat.openai.com/backend-api/accounts/check' && r.status() === 200
+    }, { timeout: 10 * Time.minute })
     if (this.cookies) {
       const cookies = await this.page.cookies('https://chat.openai.com')
       sessionToken = cookies.find(c => c.name === '__Secure-next-auth.session-token')?.value
       if (!sessionToken) throw new Error('Can not get session token.')
-      await this.cookies.set('session-token', sessionToken, 30 * Time.day)
+      await this.cookies.set('session-token', sessionToken, 10 * Time.day)
     }
     this.logger.info('LLM service load successed.')
   }
@@ -141,23 +125,31 @@ class ChatGptService extends LLMService {
     this.page = undefined
   }
 
-  async accessToken(): Promise<string> {
+  async accessToken(refresh?: boolean): Promise<string> {
     let accessToken = await this.cookies?.get('access-token')
-    if (!accessToken) {
+    if (!accessToken || refresh) {
       accessToken = await this.page.evaluate(() => {
         return fetch('https://chat.openai.com/api/auth/session')
           .then(r => r.json())
           .then(r => r.accessToken)
       })
-      await this.cookies?.set('access-token', accessToken, Time.hour)
+      await this.cookies?.set('access-token', accessToken, Time.minute * 5 )
     }
-
+    await this.page.evaluate(accessToken => {
+      return fetch('https://chat.openai.com/backend-api/accounts/check', {
+        headers: {
+          accept: '*/*',
+          authorization: `Bearer ${accessToken}`,
+        }
+      })
+    }, accessToken)
     return accessToken
   }
 
-  async ask(options: QuestionOptions): Promise<Conversation> {
+  async ask(options: QuestionOptions): Promise<ChatGptConversation> {
     let { conversation, parent } = options
-    const { action = 'next', model = 'text-davinci-002-render-sha', prompt } = options
+    const { action = 'next', prompt } = options
+    const { model = 'text-davinci-002-render-sha' } = conversation ?? {}
     const accessToken = await this.accessToken()
     const userMessageId = uuid()
     parent = parent || conversation?.latestId || uuid()
@@ -184,63 +176,66 @@ class ChatGptService extends LLMService {
       model,
     }
 
-    const res = await this.page.evaluate((body, accessToken) => {
-      return new Promise(async (resolve: (value: string) => void, reject) => {
-        const decoder = new TextDecoder()
-        const res = await fetch('https://chat.openai.com/backend-api/conversation', {
-          method: 'POST',
-          body: body,
-          headers: {
-            authorization: `Bearer ${accessToken}`,
-            accept: 'text/event-stream',
-            'content-type': 'application/json',
-          }
-        })
+    let res: any
 
-        if (!res.ok) return reject(res.status)
-
-        let data: any
-        setTimeout(() => resolve(data), 2 * 60 * 1000)
-        res.body.pipeTo(new WritableStream({
-          write(chunk) {
-            const chunks = decoder.decode(chunk).split('\n')
-            console.log('Receiving...')
-            for (const chunk of chunks) {
-              if (!chunk) continue
-              if (chunk.startsWith('data: [DONE]')) {
-                console.log('Done.')
-                return resolve(data)
-              }
-              try {
-                const raw = chunk.replace('data: ', '')
-                JSON.parse(raw)
-                data = raw
-              } catch { }
+    try {
+      res = await this.page.evaluate((body, accessToken) => {
+        return new Promise(async (resolve: (value: string) => void, reject) => {
+          const decoder = new TextDecoder()
+          const res = await fetch('https://chat.openai.com/backend-api/conversation', {
+            method: 'POST',
+            body: body,
+            headers: {
+              authorization: `Bearer ${accessToken}`,
+              accept: 'text/event-stream',
+              'content-type': 'application/json',
             }
+          })
 
-          }
-        }))
-      })
-    }, JSON.stringify(body), accessToken)
-      .then(r => JSON.parse(r))
-      .catch((e: Error) => {
-        if (e.message.includes('429')) throw new SessionError('error.gpt.too-many-requests')
+          if (!res.ok) return reject(res.status)
+
+          let data: any
+          setTimeout(() => resolve(data), 2 * 60 * 1000)
+          res.body.pipeTo(new WritableStream({
+            write(chunk) {
+              const chunks = decoder.decode(chunk).split('\n')
+              console.log('Receiving...')
+              for (const chunk of chunks) {
+                if (!chunk) continue
+                if (chunk.startsWith('data: [DONE]')) {
+                  console.log('Done.')
+                  return resolve(data)
+                }
+                try {
+                  const raw = chunk.replace('data: ', '')
+                  JSON.parse(raw)
+                  data = raw
+                } catch { }
+              }
+
+            }
+          }))
+        })
+      }, JSON.stringify(body), accessToken)
+        .then(r => JSON.parse(r))
+    } catch(e) {
+      if (e.message.includes('429')) throw new SessionError('error.llm.too-many-requests')
+      if (e.message.includes('401')) {
+        await this.accessToken(true)
+        return this.ask(options)
+      }
         throw e
-      })
+    }
 
     const gptMessageId: string = res.message.id
 
-    if (!conversation?.[isConv]) conversation = new ChatGptConversation({
-      id: res.conversation_id,
-      messages: {},
-      model,
-      expire: conversation.expire
-    }, this)
+    if (!conversation.id) conversation.id = res.conversation_id
 
-    conversation.latestId = gptMessageId
-    conversation.messages[parent]?.children?.push(userMessageId)
+    const newConv = conversation.fork({ latestId: gptMessageId })
 
-    conversation.messages[userMessageId] = {
+    newConv.messages[parent]?.children?.push(userMessageId)
+
+    newConv.messages[userMessageId] = {
       id: userMessageId,
       role: 'user',
       message: prompt,
@@ -248,7 +243,7 @@ class ChatGptService extends LLMService {
       children: [res.message.id]
     }
 
-    conversation.messages[gptMessageId] = {
+    newConv.messages[gptMessageId] = {
       id: gptMessageId,
       message: res.message.content.parts[0],
       role: 'model',
@@ -256,11 +251,11 @@ class ChatGptService extends LLMService {
     }
 
     if (this.conv) {
-      const { id, expire } = conversation
-      if (expire !== 0) await this.conv.set(id, conversation, expire && expire + Date.now())
+      const { id, expire } = newConv
+      if (expire !== 0) await this.conv.set(id, newConv, expire && expire + Date.now())
     }
 
-    return conversation
+    return newConv
   }
 
   async clear(id: string): Promise<void> {
@@ -280,17 +275,17 @@ class ChatGptService extends LLMService {
     }, id, accessToken)
   }
 
-  async create(options?: ConvOption): Promise<Conversation> {
-    let { expire = this.config.expire * Time.minute, initialPrompts: prompts = [''], model } = options ?? {}
+  async create(options?: ConvOption): Promise<ChatGptConversation> {
+    let { expire = this.config.expire * Time.minute, initialPrompts: prompts = [], model } = options ?? {}
     if (!Array.isArray(prompts)) prompts = [prompts]
+
     return prompts.reduce(async (previous, prompt) => this.ask({
       prompt,
       conversation: await previous,
-      model,
-    }), { model, expire } as unknown as Promise<Conversation>)
+    }), Promise.resolve(new ChatGptConversation({ expire, model }, this)))
   }
 
-  async query(id: string): Promise<Conversation> {
+  async query(id: string): Promise<ChatGptConversation> {
     const conv = await this.conv?.get(id)
     if (!conv) return
     return new ChatGptConversation(conv, this)

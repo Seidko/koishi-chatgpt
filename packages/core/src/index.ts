@@ -1,8 +1,15 @@
-import { Service, Schema } from 'koishi'
+import { Service, Schema, Context, Logger } from 'koishi'
+import { CacheTable, Tables } from '@koishijs/cache'
 
 declare module 'koishi' {
   interface Context {
-    llm: LLMService
+    llm: LLMCoreService
+  }
+}
+
+declare module '@koishijs/cache' {
+  interface Tables {
+    'llm/conversations': Conversation
   }
 }
 
@@ -19,10 +26,7 @@ export interface Message {
 export interface ConvOption {
   model?: string
   expire?: number
-  initialPrompts?: string[] | string
 }
-
-export type Action = 'next' | 'variant' | 'continue'
 
 export interface Conversation {
   id?: uuid
@@ -30,22 +34,67 @@ export interface Conversation {
   expire?: number
   latestId?: string
   messages?: Record<string, Message>
-  [isConv]?: boolean
+  [isConv]: true
   clear: () => Promise<void>
-  retry: () => Promise<Conversation>
-  continue: () => Promise<Conversation>
-  edit: (prompt: string) => Promise<Conversation>
+  retry?: () => Promise<Conversation>
+  continue?: () => Promise<Conversation>
+  edit?: (prompt: string) => Promise<Conversation>
   ask: (prompt: string, parent?: string) => Promise<Conversation>
-  fork: (newConv: Conversation) => Conversation
+  fork: (newConv: Partial<Conversation>) => Conversation
 }
 
-export abstract class LLMService extends Service {
+export class LLMCoreService extends Service {
+  registry: Map<string, LLMImpl>
+
+  constructor(ctx: Context) {
+    super(ctx, 'llm')
+    this.registry = new Map()
+  }
+
+  protected fork() { }
+
+  register(name: string, impl: LLMImpl) {
+    if (this.registry.get(name)) {
+      logger.warn(`duplicate  llm implement detected: ${name}`)
+    }
+    this.registry.set(name, impl)
+  }
+
+  protected getImpl(name?: string) {
+    return this.registry.get(name) ?? this.registry.values().next().value as LLMImpl
+  }
+
+  create(options: ConvOption, provider?: string) {
+    return this.getImpl(provider)?.create(options)
+  }
+
+  query(id: uuid, provider?: string) {
+    return this.getImpl(provider)?.query(id)
+  }
+
+  clear(id: uuid, provider?: string) {
+    return this.getImpl(provider)?.clear(id)
+  }
+}
+
+
+export abstract class LLMImpl {
+  protected logger: Logger
+  protected conv?: CacheTable<Conversation>
+  constructor(public ctx: Context, name: string) {
+    ctx.plugin(LLMCoreService)
+    ctx.llm.register(name, this)
+    this.conv = ctx.cache?.('llm/conversations')
+    this.logger = logger
+  }
   abstract clear(id: uuid): Promise<void>
   abstract query(id: uuid): Promise<Conversation>
   abstract create(options?: ConvOption): Promise<Conversation>
 }
 
 export const isConv = Symbol('is-conversation')
+
+const logger = new Logger('llm')
 
 export interface LLMConfig {
   expire?: number
