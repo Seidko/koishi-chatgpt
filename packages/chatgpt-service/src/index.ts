@@ -1,4 +1,4 @@
-import { Conversation, LLMImpl, LLMConfig, ConvOption, isConv } from '@seidko/llm-core'
+import { Conversation, LLMService, LLMConfig, ConvOption, isConv } from '@seidko/llm-core'
 import { Context, Schema, SessionError, pick, Time } from 'koishi'
 import { v4 as uuid, validate } from 'uuid'
 import type { Page } from 'koishi-plugin-puppeteer'
@@ -25,6 +25,7 @@ export class ChatGptConversation {
   constructor(conv: Partial<ChatGptConversation>, service: ChatGptService) {
     Object.assign(this, conv)
     this.messages ??= {}
+    this.service = service
     this[isConv] = true
   }
 
@@ -81,7 +82,7 @@ export class ChatGptConversation {
 
 }
 
-class ChatGptService extends LLMImpl {
+class ChatGptService extends LLMService {
   cookies: CacheTable<Tables['chatgpt/cookies']>
   protected conv?: CacheTable<ChatGptConversation>
   page: Page
@@ -117,7 +118,7 @@ class ChatGptService extends LLMImpl {
       if (!sessionToken) throw new Error('Can not get session token.')
       await this.cookies.set('session-token', sessionToken, 10 * Time.day)
     }
-    this.logger.info('LLM service load successed.')
+    this.logger.info('ChatGPT service load successed.')
   }
 
   protected async stop(): Promise<void> {
@@ -276,13 +277,9 @@ class ChatGptService extends LLMImpl {
   }
 
   async create(options?: ConvOption): Promise<ChatGptConversation> {
-    let { expire = this.config.expire * Time.minute, initialPrompts: prompts = [], model } = options ?? {}
-    if (!Array.isArray(prompts)) prompts = [prompts]
+    let { expire = this.config.expire * Time.minute, model } = options ?? {}
 
-    return prompts.reduce(async (previous, prompt) => this.ask({
-      prompt,
-      conversation: await previous,
-    }), Promise.resolve(new ChatGptConversation({ expire, model }, this)))
+    return new ChatGptConversation({ expire, model }, this)
   }
 
   async query(id: string): Promise<ChatGptConversation> {
@@ -301,7 +298,7 @@ namespace ChatGptService {
 
   export const name = 'chatgpt-service'
 
-  export const using = ['puppeteer'] as const
+  export const using = ['puppeteer']
 }
 
 export default ChatGptService

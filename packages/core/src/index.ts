@@ -1,5 +1,5 @@
-import { Service, Schema, Context, Logger } from 'koishi'
-import { CacheTable, Tables } from '@koishijs/cache'
+import { Service, Schema, Context, Logger, Awaitable } from 'koishi'
+import { CacheTable } from '@koishijs/cache'
 
 declare module 'koishi' {
   interface Context {
@@ -26,6 +26,7 @@ export interface Message {
 export interface ConvOption {
   model?: string
   expire?: number
+  provider?: string
 }
 
 export interface Conversation {
@@ -44,7 +45,7 @@ export interface Conversation {
 }
 
 export class LLMCoreService extends Service {
-  registry: Map<string, LLMImpl>
+  registry: Map<string, LLMService>
 
   constructor(ctx: Context) {
     super(ctx, 'llm')
@@ -53,40 +54,56 @@ export class LLMCoreService extends Service {
 
   protected fork() { }
 
-  register(name: string, impl: LLMImpl) {
+  register(name: string, service: LLMService) {
     if (this.registry.get(name)) {
       logger.warn(`duplicate  llm implement detected: ${name}`)
     }
-    this.registry.set(name, impl)
+    this.registry.set(name, service)
+
+    return () => this.registry.delete(name)
   }
 
-  protected getImpl(name?: string) {
-    return this.registry.get(name) ?? this.registry.values().next().value as LLMImpl
+  protected getSerive(name?: string) {
+    return this.registry.get(name) ?? this.registry.values().next().value as LLMService
   }
 
-  create(options: ConvOption, provider?: string) {
-    return this.getImpl(provider)?.create(options)
+  create(options?: ConvOption) {
+    return this.getSerive(options?.provider)?.create(options)
   }
 
   query(id: uuid, provider?: string) {
-    return this.getImpl(provider)?.query(id)
+    return this.getSerive(provider)?.query(id)
   }
 
   clear(id: uuid, provider?: string) {
-    return this.getImpl(provider)?.clear(id)
+    return this.getSerive(provider)?.clear(id)
   }
 }
 
-
-export abstract class LLMImpl {
+export abstract class LLMService {
   protected logger: Logger
   protected conv?: CacheTable<Conversation>
   constructor(public ctx: Context, name: string) {
     ctx.plugin(LLMCoreService)
-    ctx.llm.register(name, this)
-    this.conv = ctx.cache?.('llm/conversations')
+    ctx.using(['__cache__'], ctx => this.conv = ctx.cache('llm/conversations'))
     this.logger = logger
+
+    let dispose: () => boolean
+
+    ctx.on('ready', async () => {
+      await this.start()
+      ctx.using(['llm'], ctx => dispose = ctx.llm.register(name, this))
+    })
+
+    ctx.on('dispose', async () => {
+      await this.stop()
+      dispose?.()
+    })
   }
+
+  protected start(): Awaitable<void> {}
+  protected stop(): Awaitable<void> {}
+
   abstract clear(id: uuid): Promise<void>
   abstract query(id: uuid): Promise<Conversation>
   abstract create(options?: ConvOption): Promise<Conversation>
