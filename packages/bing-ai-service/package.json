@@ -1,0 +1,65 @@
+{
+  "name": "@seidko/koishi-plugin-bing-ai-service",
+  "description": "Koishi Bing AI unify service implement.",
+  "version": "0.3.1",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "author": "Seidko <seidko.coding@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seidko/koishi-chatgpt.git",
+    "directory": "packages/bing-ai-service"
+  },
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/Seidko/koishi-chatgpt/issues"
+  },
+  "scripts": {
+    "build": "atsc -b"
+  },
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "service",
+    "newbing",
+    "bing",
+    "gpt"
+  ],
+  "devDependencies": {
+    "koishi": "^4.12.1",
+    "@koishijs/cache": "^0.1.4",
+    "@types/uuid": "^9.0.1",
+    "puppeteer-core": "^19.8.0",
+    "koishi-plugin-puppeteer": "^3.5.0",
+    "atsc": "^1.2.2"
+  },
+  "peerDependencies": {
+    "koishi": "^4.12.0"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0",
+    "@seidko/gpt-core": "^0.3.1"
+  },
+  "koishi": {
+    "description": {
+      "en": "Service of New Bing API",
+      "zh": "New Bing AI 的基础服务"
+    },
+    "service": {
+      "required": [
+        "puppeteer"
+      ],
+      "optional": [
+        "cache"
+      ],
+      "implements": [
+        "llm"
+      ]
+    }
+  }
+}

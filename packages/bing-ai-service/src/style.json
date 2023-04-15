@@ -1,0 +1,53 @@
+{
+  "creative": [
+    "nlu_direct_response_filter",
+    "deepleo",
+    "disable_emoji_spoken_text",
+    "responsible_ai_policy_235",
+    "enablemm",
+    "h3imaginative",
+    "dlformfix",
+    "responseos",
+    "cachewriteext",
+    "e2ecachewrite",
+    "nodlcpcwrite",
+    "dv3sugg",
+    "clgalileo",
+    "gencontentv3"
+  ],
+  "balanced": [
+    "nlu_direct_response_filter",
+    "deepleo",
+    "disable_emoji_spoken_text",
+    "responsible_ai_policy_235",
+    "enablemm",
+    "galileo",
+    "dlformfix",
+    "responseos",
+    "cachewriteext",
+    "e2ecachewrite",
+    "nodlcpcwrite",
+    "dv3sugg",
+    "cachewriteext",
+    "e2ecachewrite",
+    "nodlcpcwrite",
+    "nointernalsugg",
+    "dlwebtrunc",
+    "glpromptv3plus"
+  ],
+  "precise": [
+    "nlu_direct_response_filter",
+    "deepleo",
+    "disable_emoji_spoken_text",
+    "responsible_ai_policy_235",
+    "enablemm",
+    "h3precise",
+    "dlformfix",
+    "responseos",
+    "cachewriteext",
+    "e2ecachewrite",
+    "nodlcpcwrite",
+    "dv3sugg",
+    "clgalileo"
+  ]
+}

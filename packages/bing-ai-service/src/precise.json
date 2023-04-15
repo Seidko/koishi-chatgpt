@@ -1,0 +1,69 @@
+{
+  "arguments": [
+    {
+      "source": "cib",
+      "optionsSets": [
+        "nlu_direct_response_filter",
+        "deepleo",
+        "disable_emoji_spoken_text",
+        "responsible_ai_policy_235",
+        "enablemm",
+        "h3precise",
+        "dlformfix",
+        "responseos",
+        "cachewriteext",
+        "e2ecachewrite",
+        "nodlcpcwrite",
+        "dv3sugg",
+        "clgalileo"
+      ],
+      "allowedMessageTypes": [
+        "Chat",
+        "InternalSearchQuery",
+        "InternalSearchResult",
+        "Disengaged",
+        "InternalLoaderMessage",
+        "RenderCardRequest",
+        "AdsQuery",
+        "SemanticSerp",
+        "GenerateContentQuery",
+        "SearchQuery"
+      ],
+      "sliceIds": [
+        "chk1cf",
+        "nopreloadsstf",
+        "rmvmorefrq-c",
+        "winlongmsg2tf",
+        "controlwp",
+        "wintone2tf",
+        "407dlformfix",
+        "405suggb",
+        "chatgptsugg",
+        "330uaugs0",
+        "0329resp",
+        "udscahrfoncf",
+        "udstrclm10cmp",
+        "udstrclm10",
+        "329v3pwebtrunc",
+        "404e2ewrt",
+        "408nodedups0",
+        "403recansgnds0"
+      ],
+      "verbosity": "verbose",
+      "isStartOfSession": true,
+      "message": {
+        "locale": "zh-CN",
+        "market": "zh-CN",
+        "region": "US",
+        "author": "user",
+        "inputMethod": "Keyboard",
+        "messageType": "Chat"
+      },
+      "participant": {
+      }
+    }
+  ],
+  "invocationId": "1",
+  "target": "chat",
+  "type": 4
+}
