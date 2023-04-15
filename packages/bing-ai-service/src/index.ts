@@ -214,8 +214,6 @@ namespace BingService {
     ]),
   ])
 
-  export const name = 'chatgpt-service'
-
   export const using = ['__cache__']
 }
 

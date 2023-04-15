@@ -296,8 +296,6 @@ namespace ChatGptService {
     LLMConfig,
   ])
 
-  export const name = 'chatgpt-service'
-
   export const using = ['puppeteer']
 }
 

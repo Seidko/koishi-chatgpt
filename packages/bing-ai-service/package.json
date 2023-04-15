@@ -1,7 +1,7 @@
 {
   "name": "@seidko/koishi-plugin-bing-ai-service",
   "description": "Koishi Bing AI unify service implement.",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "uuid": "^9.0.0",
-    "@seidko/gpt-core": "^0.3.1"
+    "@seidko/llm-core": "^0.4.0"
   },
   "koishi": {
     "description": {
@@ -52,10 +52,10 @@
     },
     "service": {
       "required": [
-        "puppeteer"
+        "cache"
       ],
       "optional": [
-        "cache"
+        "puppeteer"
       ],
       "implements": [
         "llm"
