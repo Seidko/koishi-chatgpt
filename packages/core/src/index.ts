@@ -1,4 +1,6 @@
-import { Service, Schema, Context, Logger, Awaitable } from 'koishi'
+import type { h, Awaitable, Context } from 'koishi'
+import type { Buffer } from 'buffer'
+import { Service, Schema, Logger } from 'koishi'
 import { CacheTable } from '@koishijs/cache'
 
 declare module 'koishi' {
@@ -34,6 +36,7 @@ export interface Conversation {
   model?: string
   expire?: number
   latestId?: string
+  root?: Conversation
   messages?: Record<string, Message>
   [isConv]: true
   clear: () => Promise<void>
@@ -42,12 +45,17 @@ export interface Conversation {
   edit?: (prompt: string) => Promise<Conversation>
   ask: (prompt: string, parent?: string) => Promise<Conversation>
   fork: (newConv: Partial<Conversation>) => Conversation
+  renderText: (messageId?: uuid) => string
+  renderMarkdown: (messageId?: uuid) => string
+  renderElement: (messageId?: uuid) => h[]
+  renderImage: (messageId?: uuid) => Promise<Buffer>
 }
 
 export class LLMCoreService extends Service {
   registry: Map<string, LLMService>
 
   constructor(ctx: Context) {
+    ctx.i18n.define('zh', require('./locales/zh-CN'))
     super(ctx, 'llm')
     this.registry = new Map()
   }
@@ -56,7 +64,7 @@ export class LLMCoreService extends Service {
 
   register(name: string, service: LLMService) {
     if (this.registry.get(name)) {
-      logger.warn(`duplicate  llm implement detected: ${name}`)
+      logger.warn(`duplicate llm implement detected: ${name}`)
     }
     this.registry.set(name, service)
 
@@ -101,8 +109,8 @@ export abstract class LLMService {
     })
   }
 
-  protected start(): Awaitable<void> {}
-  protected stop(): Awaitable<void> {}
+  protected start(): Awaitable<void> { }
+  protected stop(): Awaitable<void> { }
 
   abstract clear(id: uuid): Promise<void>
   abstract query(id: uuid): Promise<Conversation>

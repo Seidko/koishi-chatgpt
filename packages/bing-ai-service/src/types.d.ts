@@ -6,7 +6,7 @@ export interface Argument {
     sliceIds: string[]
     verbosity: 'verbose'
     traceId: string // changable
-    isStartOfSession: boolean
+    isStartOfSession: boolean // changable
     message: {
       locale: string
       market: string
@@ -67,7 +67,7 @@ export interface Message {
   adaptiveCards: {
     type: 'AdaptiveCard'
     version: '1.0'
-    body: {
+    body: ({
       type: 'TextBlock'
       text: string
       warp: boolean
@@ -80,7 +80,7 @@ export interface Message {
         italic: boolean
         text: string
       }[]
-    }[]
+    })[]
   }[]
   sourceAttributions: {
     providerDisplayName: string
