@@ -150,7 +150,7 @@ class BingService extends LLMService {
     const parent = conv.messages[parentId]
     const invocationId = parent?.invocationId ?? 0
     const ws = this.http.ws('wss://sydney.bing.com/sydney/ChatHub')
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
 
       ws.on('open', async () => {
         ws.send(this.serial({
@@ -183,10 +183,10 @@ class BingService extends LLMService {
           for (const data of parsed) {
             if (data.type === 2) {
               switch (data.item.result.value) {
-                case 'Forbidden': throw new SessionError('error.llm.forbidden')
-                case 'UnauthorizedRequest': throw new SessionError('error.llm.authorize-failed')
+                case 'Forbidden': reject(new SessionError('error.llm.forbidden'))
+                case 'UnauthorizedRequest': reject(new SessionError('error.llm.authorize-failed'))
                 case 'Success': break
-                default: throw new SessionError('error.llm.unknown')
+                default: reject(new SessionError('error.llm.unknown'))
               }
 
               const message = data.item.messages.find(v => v.author === 'user')

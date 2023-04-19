@@ -1,7 +1,7 @@
 {
   "name": "@seidko/koishi-plugin-bing-ai-service",
   "description": "Koishi Bing AI unify service implement.",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
