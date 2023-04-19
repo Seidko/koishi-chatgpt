@@ -47,7 +47,7 @@ export interface Response {
       numUserMessagesInConversation: number
     }
     result: {
-      value: 'Success' | 'Forbidden' | 'UnauthorizedRequest'
+      value: 'Success' | 'Forbidden' | 'UnauthorizedRequest' | 'ProcessingMessage'
       message: string
       serviceVersion: string
     }

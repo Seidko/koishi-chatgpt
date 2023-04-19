@@ -3,4 +3,5 @@ error:
     too-many-requests: 请求过多，请稍后重试！
     authorize-failed: 验证过期，请重新登录。
     forbidden: 访问禁止，请检查账号的可用性。
-    unknown: 发生未知错误，请联系插件开发者。
+    unknown: 发生未知错误，请联系插件开发者。错误码：{0}
+    busy: 有消息正在处理中，请稍后再试。

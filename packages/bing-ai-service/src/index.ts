@@ -185,10 +185,11 @@ class BingService extends LLMService {
             for (const data of parsed) {
               if (data.type === 2) {
                 switch (data.item.result.value) {
-                  case 'Forbidden': reject(new SessionError('error.llm.forbidden'))
-                  case 'UnauthorizedRequest': reject(new SessionError('error.llm.authorize-failed'))
+                  case 'Forbidden': throw new SessionError('error.llm.forbidden')
+                  case 'UnauthorizedRequest': throw new SessionError('error.llm.authorize-failed')
+                  case 'ProcessingMessage': throw new SessionError('error.llm.busy')
                   case 'Success': break
-                  default: reject(new SessionError('error.llm.unknown'))
+                  default: throw new SessionError('error.llm.unknown', [data.item.result.value])
                 }
                 const message = data.item.messages.find(v => v.author === 'user')
                 const awnser = data.item.messages.find(v => v.suggestedResponses)
@@ -212,13 +213,12 @@ class BingService extends LLMService {
                 }
 
                 resolve(newConv)
+                ws.close()
+                dispose()
               }
-
-              dispose()
             }
           } catch(e) {
             reject(e)
-          } finally {
             ws.close()
             dispose()
           }
