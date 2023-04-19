@@ -68,7 +68,8 @@ export class BingConversation {
     const id = messageId ?? this.latestId
 
     const message = this.messages[id].message
-    return message.replace(/\[\^\d+\^\]\[(\d+)\]/g, '<sup>[$1]</sup>')
+    // return message.replace(/\[\^\d+\^\]\[(\d+)\]/g, '<sup>[$1]</sup>')
+    return message.replace(/\[\^\d+\^\]\[(\d+)\]/g, '[$1]')
   }
 
   renderElement(messageId?: string): h[] {
@@ -175,45 +176,51 @@ class BingService extends LLMService {
         ws.send(this.serial(options))
 
         ws.on('message', raw => {
-          const parsed: Response[] = raw.toString('utf-8')
-            .split(DELIMITER)
-            .filter(Boolean)
-            .map(s => JSON.parse(s))
+          try {
+            const parsed: Response[] = raw.toString('utf-8')
+              .split(DELIMITER)
+              .filter(Boolean)
+              .map(s => JSON.parse(s))
 
-          for (const data of parsed) {
-            if (data.type === 2) {
-              switch (data.item.result.value) {
-                case 'Forbidden': reject(new SessionError('error.llm.forbidden'))
-                case 'UnauthorizedRequest': reject(new SessionError('error.llm.authorize-failed'))
-                case 'Success': break
-                default: reject(new SessionError('error.llm.unknown'))
+            for (const data of parsed) {
+              if (data.type === 2) {
+                switch (data.item.result.value) {
+                  case 'Forbidden': reject(new SessionError('error.llm.forbidden'))
+                  case 'UnauthorizedRequest': reject(new SessionError('error.llm.authorize-failed'))
+                  case 'Success': break
+                  default: reject(new SessionError('error.llm.unknown'))
+                }
+                const message = data.item.messages.find(v => v.author === 'user')
+                const awnser = data.item.messages.find(v => v.suggestedResponses)
+
+                const newConv = conv.fork({ latestId: awnser.messageId })
+
+                newConv.root.messages[message.messageId] = {
+                  id: message.messageId,
+                  role: 'user',
+                  message: prompt,
+                  parent: conv.latestId,
+                  children: [awnser.messageId]
+                }
+
+                newConv.root.messages[awnser.messageId] = {
+                  id: awnser.messageId,
+                  message: (awnser.adaptiveCards[0].body[0] as any).text,
+                  role: 'model',
+                  parent: message.messageId,
+                  invocationId: invocationId + 1
+                }
+
+                resolve(newConv)
               }
 
-              const message = data.item.messages.find(v => v.author === 'user')
-              const awnser = data.item.messages.find(v => v.suggestedResponses)
-
-              const newConv = conv.fork({ latestId: awnser.messageId })
-
-              newConv.root.messages[message.messageId] = {
-                id: message.messageId,
-                role: 'user',
-                message: prompt,
-                parent: conv.latestId,
-                children: [awnser.messageId]
-              }
-
-              newConv.root.messages[awnser.messageId] = {
-                id: awnser.messageId,
-                message: (awnser.adaptiveCards[0].body[0] as any).text,
-                role: 'model',
-                parent: message.messageId,
-                invocationId: invocationId + 1
-              }
-
-              resolve(newConv)
               dispose()
-              ws.close()
             }
+          } catch(e) {
+            reject(e)
+          } finally {
+            ws.close()
+            dispose()
           }
         })
       })
