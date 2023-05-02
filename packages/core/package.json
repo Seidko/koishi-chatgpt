@@ -1,7 +1,7 @@
 {
   "name": "@seidko/koishi-plugin-gpt",
   "description": "Unify koishi GPT service",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
