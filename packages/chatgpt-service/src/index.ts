@@ -42,7 +42,7 @@ class ChatGPTService extends LLMService {
     if (!sessionToken) throw new Error('Can not get session token.')
     await cache.set('session-token', sessionToken, 10 * Time.day)
 
-    this.logger.info('ChatGPT service load successed.')
+    this.logger.info('ChatGPT instance create load successed.')
 
     return new ChatGPTInstance(this.ctx, page)
   }
