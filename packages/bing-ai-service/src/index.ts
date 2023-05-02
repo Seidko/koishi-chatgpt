@@ -13,13 +13,6 @@ declare module '@seidko/koishi-plugin-gpt' {
   }
 }
 
-declare module 'koishi' {
-  interface Tables {
-    bing_ai_messages: Message & { conversationId: string }
-    bing_ai_conversations: Conversation
-  }
-}
-
 const DELIMITER = '\x1e'
 
 class BingService extends LLMService {
@@ -37,46 +30,14 @@ class BingService extends LLMService {
       }
     })
 
-    ctx.database.extend('bing_ai_conversations', {
-      id: {
-        type: 'char',
-        length: 128,
-        nullable: false,
-      },
-      expire: 'time',
-      latestId: 'char',
-      model: 'string',
+    ctx.database.extend('gpt_conversaion', {
       clientId: 'string',
       convSig: 'string',
-      messages: 'list',
       invocationId: 'unsigned',
       traceId: {
         type: 'char',
         length: 32,
       },
-    }, {
-      autoInc: false,
-    })
-
-    ctx.database.extend('bing_ai_messages', {
-      conversationId: {
-        type: 'char',
-        length: 128,
-      },
-      children: 'list',
-      id: {
-        type: 'char',
-        length: 36,
-        nullable: false,
-      },
-      message: 'text',
-      parent: {
-        type: 'char',
-        length: 36,
-      },
-      role: 'string',
-    }, {
-      autoInc: false,
     })
   }
 
@@ -111,21 +72,6 @@ class BingService extends LLMService {
 
     this.logger.info('Bing AI instance create successed.')
     return new BingInstance(this.ctx, cookies)
-  }
-
-  async saveConv(conv: Conversation) {
-    await this.ctx.database.upsert('bing_ai_conversations', [conv])
-  }
-
-  async saveMsg(messages: Message[] | Message, convId: string) {
-    if (!Array.isArray(messages)) messages = [messages]
-    await this.ctx.database.upsert(
-      'bing_ai_messages',
-      messages.map((v: Message & { conversationId: string }) => {
-        v.conversationId = convId
-        return v
-      })
-    )
   }
 
   async ask(prompt: string, conv: Conversation): Promise<Message> {
@@ -248,16 +194,6 @@ class BingService extends LLMService {
 class BingInstance extends Instance {
   constructor(ctx: Context, protected cookies: string) {
     super(ctx, 'bing')
-  }
-
-  async queryConv(id: string): Promise<Conversation> {
-    const [conv] = await this.ctx.database.get('bing_ai_conversations', { id })
-    return conv
-  }
-
-  async queryMsg(id: string): Promise<Message & { conversationId: string }> {
-    const [message] = await this.ctx.database.get('bing_ai_messages', { id })
-    return message
   }
 
   async ask(options: AskOptions): Promise<Message> {
