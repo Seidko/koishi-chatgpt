@@ -1,6 +1,6 @@
 import { Schema, Context } from 'koishi'
 import { } from '@seidko/koishi-plugin-gpt'
-import { } from '@koishijs/cache'
+import { CacheTable, Tables } from '@koishijs/cache'
 
 declare module '@koishijs/cache' {
   interface Tables {
@@ -19,7 +19,8 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 export async function apply(ctx: Context, config: Config) {
-  const cache = ctx.cache('gpt-chatbot/conv')
+  // @ts-expect-error
+  const cache: CacheTable<Tables['gpt-chatbot/conv']> = ctx.cache('gpt-chatbot/conv')
   const instance = await ctx.llm.create(config.service)
   let model: string
 
@@ -46,5 +47,6 @@ export async function apply(ctx: Context, config: Config) {
   ctx.command('ai.clear')
     .action(async ({ session }) => {
       await cache.delete(session.uid)
+      return '清理成功！'
     })
 }
