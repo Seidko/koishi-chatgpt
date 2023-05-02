@@ -75,7 +75,7 @@ export abstract class LLMService {
 
   abstract instance(): Promise<Instance>
 
-  async saveConv(conv: Conversation) {
+  protected async saveConv(conv: Conversation) {
     await this.ctx.database.upsert('gpt_conversaion', [conv])
   }
 
