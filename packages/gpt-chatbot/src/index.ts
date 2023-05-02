@@ -1,5 +1,5 @@
 import { Schema, Context } from 'koishi'
-import { Conversation } from '@seidko/llm-core'
+import { } from '@seidko/koishi-plugin-gpt'
 import { } from '@koishijs/cache'
 
 declare module '@koishijs/cache' {
@@ -11,37 +11,40 @@ declare module '@koishijs/cache' {
 export const using = ['llm', '__cache__'] as const
 export const name = 'gpt-chatbot'
 
-export interface Config {}
-export const Config: Schema<Config> = Schema.object({})
+export interface Config {
+  service: string
+}
+export const Config: Schema<Config> = Schema.object({
+  service: Schema.string().description('服务名称').required()
+})
 
 export async function apply(ctx: Context, config: Config) {
   const cache = ctx.cache('gpt-chatbot/conv')
-  const convId = await cache.get('conversation-id')
-  let conv: Conversation
+  const instance = await ctx.llm.create(config.service)
+  let model: string
 
   ctx.command('ai.chat <prompt:text>')
     .action(async ({ session }, prompt) => {
-      if (!conv) conv = convId ? await ctx.llm.query(convId) : await ctx.llm.create()
-
-      const newConv = await conv.ask(prompt, await cache.get(session.uid))
-      await cache.set(session.uid, newConv.latestId)
-      return newConv.renderElement()
+      const parent = await cache.get(session.uid)
+      const msg = await instance.ask({ prompt, parent, model })
+      await cache.set(session.uid, msg.id)
+      return instance.render('element', msg.message)
     })
 
   ctx.command('ai.ask <prompt:text>')
     .action(async ({}, prompt) => {
-      if (!conv) conv = convId ? await ctx.llm.query(convId) : await ctx.llm.create()
-      return conv.ask(prompt).then(c => c.renderElement())
+      const msg = await instance.ask({ prompt , model })
+      return instance.render('element', msg.message)
+    })
+
+  ctx.command('ai.model <model:string>')
+    .action(async ({}, m) => {
+      model = m
+      return '模型设置成功！'
     })
 
   ctx.command('ai.clear')
     .action(async ({ session }) => {
       await cache.delete(session.uid)
-    })
-
-  ctx.command('ai.clear-conv')
-    .action(async () => {
-      conv = await ctx.llm.create()
-      await cache.set('conversation-id', conv.id)
     })
 }
