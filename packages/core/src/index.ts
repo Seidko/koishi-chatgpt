@@ -11,6 +11,10 @@ declare module 'koishi' {
     gpt_messages: Message & { conversationId: string }
   }
 
+  interface Events {
+    'llm/service-load'(service: string): void
+  }
+
 }
 
 const logger = new Logger('llm')
@@ -66,6 +70,7 @@ export abstract class LLMService {
 
     ctx.on('ready', () => {
       dispose = ctx.llm.register(name, this)
+      ctx.emit('llm/service-load', name)
     })
 
     ctx.on('dispose', () => {
@@ -98,6 +103,7 @@ class LLMCoreService extends Service {
     ctx.i18n.define('zh', require('./locales/zh-CN'))
     super(ctx, 'llm')
     this.registry = new Map()
+
     ctx.database.extend('gpt_conversaion', {
       id: {
         type: 'char',
@@ -148,7 +154,16 @@ class LLMCoreService extends Service {
 
   create(service: string): Promise<Instance> {
     const serv = this.registry.get(service)
-    return serv.instance()
+    if (serv) return serv.instance()
+    return new Promise(resolve => {
+      const dispose = this.ctx.on('llm/service-load', s => {
+        if (service === s) {
+          const serv = this.registry.get(service)
+          resolve(serv.instance())
+          dispose()
+        }
+      })
+    })
   }
 }
 
