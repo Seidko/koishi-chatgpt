@@ -37,12 +37,11 @@
   "peerDependencies": {
     "koishi": "^4.12.0",
     "koishi-plugin-puppeteer": "^3.5.0",
-    "@koishijs/cache": "^0.1.4",
     "koishi-plugin-markdown": "^1.1.1"
   },
   "dependencies": {
     "uuid": "^9.0.0",
-    "@seidko/llm-core": "^0.5.2"
+    "@seidko/koishi-plugin-gpt": "^0.5.2"
   },
   "peerDependenciesMeta": {
     "koishi-plugin-markdown": {
@@ -59,13 +58,10 @@
     },
     "service": {
       "required": [
-        "cache"
+        "llm"
       ],
       "optional": [
         "puppeteer"
-      ],
-      "implements": [
-        "llm"
       ]
     }
   }

@@ -1,90 +1,24 @@
-import { Conversation, LLMService, LLMConfig, ConvOption, isConv } from '@seidko/llm-core'
-import { Context, Schema, SessionError, pick, Time, Quester, h } from 'koishi'
+import { Conversation, LLMService, Instance, Message, AskOptions } from '@seidko/koishi-plugin-gpt'
+import { Context, Schema, SessionError, Time, Quester, h } from 'koishi'
 import { v4 as uuid } from 'uuid'
-import type { Buffer } from 'buffer'
 import type { Page } from 'koishi-plugin-puppeteer'
-import type { } from '@koishijs/cache'
 import type { Argument, Response } from './types'
 
-declare module '@seidko/llm-core' {
-  interface Message {
+declare module '@seidko/koishi-plugin-gpt' {
+  interface Conversation {
+    clientId: string
+    convSig: string
+    traceId: string
     invocationId?: number
   }
 }
 
-interface QuestionOptions {
-  conv: BingConversation
-  prompt: string
-  parent?: string
-}
-
-export interface BingConversation extends Conversation {
-  clientId: string
-  convSig: string
-  traceId: string
-  root: BingConversation
-}
-
-export class BingConversation {
-  protected service: BingService
-  constructor(conv: Partial<BingConversation>, service: BingService) {
-    Object.assign(this, conv)
-    this.messages ??= {}
-    this.traceId = uuid().replace(/\-/g, '')
-    this.service = service
-    this[isConv] = true
-    this.root = this
-  }
-
-  fork(newConv: Partial<BingConversation>): BingConversation {
-    for (const k in newConv) {
-      if (newConv[k] === undefined) delete newConv[k]
-    }
-    return Object.assign(Object.create(this), newConv)
-  }
-
-  toJSON() {
-    return JSON.stringify(pick(this, ['id', 'expire', 'latestId', 'model', 'messages']))
-  }
-
-  async clear(): Promise<void> {
-    await this.service.clear(this.id)
-  }
-
-  async ask(prompt: string, parent: string): Promise<BingConversation> {
-    return await this.service.ask({
-      prompt,
-      parent,
-      conv: this,
-    })
-  }
-
-  renderText(messageId?: string): string {
-    const id = messageId ?? this.latestId
-    return this.messages[id].message
-  }
-
-  renderMarkdown(messageId?: string): string {
-    const id = messageId ?? this.latestId
-
-    const message = this.messages[id].message
-    // return message.replace(/\[\^\d+\^\]\[(\d+)\]/g, '<sup>[$1]</sup>')
-    return message.replace(/\[\^\d+\^\]\[(\d+)\]/g, '[$1]')
-  }
-
-  renderElement(messageId?: string): h[] {
-    const { md } = require('koishi-plugin-markdown')
-    return md(this.renderMarkdown(messageId))
-  }
-
-  async renderImage(messageId?: string): Promise<Buffer> {
-    const page = await this.service.ctx.puppeteer?.page()
-    if (!page) return
-    // await page.setContent('')
-    // TODO: Image Render
+declare module 'koishi' {
+  interface Tables {
+    bing_ai_messages: Message & { conversationId: string }
+    bing_ai_conversations: Conversation
   }
 }
-
 
 const DELIMITER = '\x1e'
 
@@ -102,58 +36,103 @@ class BingService extends LLMService {
         referer: 'https://www.bing.com/search?q=Bing+AI&showconv=1&FORM=hpcodx',
       }
     })
-  }
 
-  protected async start(): Promise<void> {
-    const cookies = await this.ctx.cache('default').get('bingai/cookies')
-    if (this.config.cookies || !cookies) {
-      if (this.config.usingPuppeteer) {
-        this.ctx.using(['puppeteer'], async ctx => {
-          let page: Page
-          try {
-            page = await ctx.puppeteer.page()
-            await page.evaluateOnNewDocument('Object.defineProperties(navigator, { webdriver:{ get: () => false } })')
-            await page.goto('https://www.bing.com/search?q=Bing+AI&showconv=1&FORM=hpcodx')
-            await page.waitForResponse('https://b.clarity.ms/collect', { timeout: 10 * Time.minute })
-            const pageCookies = await page.cookies('https://chat.openai.com')
-              .then(c => c.map(c => `${c.name}=${c.value}`).join('; '))
-            await ctx.cache('default').set('bingai/cookies', pageCookies, 10 * Time.day)
-          } finally {
-            page?.close()
-          }
+    ctx.database.extend('bing_ai_conversations', {
+      id: {
+        type: 'char',
+        length: 128,
+        nullable: false,
+      },
+      expire: 'time',
+      latestId: 'char',
+      model: 'string',
+      clientId: 'string',
+      convSig: 'string',
+      messages: 'list',
+      invocationId: 'unsigned',
+      traceId: {
+        type: 'char',
+        length: 32,
+      },
+    }, {
+      autoInc: false,
+    })
 
-          this.logger.info('Bing AI service load successed.')
-        })
-        return
-      } else {
-        try {
-          const cookies = JSON.parse(this.config.cookies)
-            .filter((c: any) => c.session !== true)
-            .map((c: any) => `${c.name}=${c.value}`).join('; ')
-          await this.ctx.cache('default').set('bingai/cookies', cookies, 10 * Time.day)
-          // this.ctx.scope.update({})
-        } catch {
-          this.logger.error('Cannot parse cookies.')
-        }
-      }
-    }
-
-    this.logger.info('Bing AI service load successed.')
+    ctx.database.extend('bing_ai_messages', {
+      conversationId: {
+        type: 'char',
+        length: 128,
+      },
+      children: 'list',
+      id: {
+        type: 'char',
+        length: 36,
+        nullable: false,
+      },
+      message: 'text',
+      parent: {
+        type: 'char',
+        length: 36,
+      },
+      role: 'string',
+    }, {
+      autoInc: false,
+    })
   }
 
   protected serial(object: any): string {
     return JSON.stringify(object) + DELIMITER
   }
 
-  ask(option: QuestionOptions): Promise<BingConversation> {
-    const { conv, prompt } = option
-    const parentId = option.parent ?? conv.latestId
-    const parent = conv.messages[parentId]
-    const invocationId = parent?.invocationId ?? 0
+  async instance(): Promise<Instance> {
+    let cookies: string
+    if (this.config.usingPuppeteer) {
+      let page: Page
+      try {
+        page = await this.ctx.puppeteer.page()
+        await page.evaluateOnNewDocument('Object.defineProperties(navigator, { webdriver:{ get: () => false } })')
+        await page.goto('https://www.bing.com/search?q=Bing+AI&showconv=1&FORM=hpcodx')
+        await page.waitForResponse('https://b.clarity.ms/collect', { timeout: 10 * Time.minute })
+        cookies = await page.cookies('https://www.bing.com')
+          .then(c => c.map(c => `${c.name}=${c.value}`).join('; '))
+      } finally {
+        page?.close()
+      }
+    } else {
+      try {
+        cookies = JSON.parse(this.config.cookies)
+          .filter((c: any) => c.session !== true)
+          .map((c: any) => `${c.name}=${c.value}`).join('; ')
+        // this.ctx.scope.update({})
+      } catch {
+        this.logger.error('Cannot parse cookies.')
+      }
+    }
+
+    this.logger.info('Bing AI instance create successed.')
+    return new BingInstance(this.ctx, cookies)
+  }
+
+  async saveConv(conv: Conversation) {
+    await this.ctx.database.upsert('bing_ai_conversations', [conv])
+  }
+
+  async saveMsg(messages: Message[] | Message, convId: string) {
+    if (!Array.isArray(messages)) messages = [messages]
+    await this.ctx.database.upsert(
+      'bing_ai_messages',
+      messages.map((v: Message & { conversationId: string }) => {
+        v.conversationId = convId
+        return v
+      })
+    )
+  }
+
+  async ask(prompt: string, conv: Conversation): Promise<Message> {
     const ws = this.http.ws('wss://sydney.bing.com/sydney/ChatHub')
     return new Promise((resolve, reject) => {
 
-      ws.on('open', async () => {
+      ws.once('open', async () => {
         ws.send(this.serial({
           protocol: 'json',
           version: 1,
@@ -171,11 +150,14 @@ class BingService extends LLMService {
         options.arguments[0].conversationSignature = conv.convSig
         options.arguments[0].participant.id = conv.clientId
         options.arguments[0].conversationId = conv.id
-        options.invocationId = `${invocationId}`
-        options.arguments[0].isStartOfSession = invocationId < 1
+        options.invocationId = `${conv.invocationId}`
+        options.arguments[0].isStartOfSession = conv.invocationId < 1
         ws.send(this.serial(options))
 
-        ws.on('message', raw => {
+        ws.send(this.serial({ type: 6 }))
+        const dispose = this.ctx.setInterval(() => ws.send(this.serial({ type: 6 })), 20 * Time.second)
+
+        ws.on('message', async raw => {
           try {
             const parsed: Response[] = raw.toString('utf-8')
               .split(DELIMITER)
@@ -185,39 +167,44 @@ class BingService extends LLMService {
             for (const data of parsed) {
               if (data.type === 2) {
                 switch (data.item.result.value) {
+                  case 'Success': break
                   case 'Forbidden': throw new SessionError('error.llm.forbidden')
                   case 'UnauthorizedRequest': throw new SessionError('error.llm.authorize-failed')
                   case 'ProcessingMessage': throw new SessionError('error.llm.busy')
-                  case 'Success': break
                   default: throw new SessionError('error.llm.unknown', [data.item.result.value])
                 }
                 const message = data.item.messages.find(v => v.author === 'user')
                 const awnser = data.item.messages.find(v => v.suggestedResponses)
 
-                const newConv = conv.fork({ latestId: awnser.messageId })
-
-                newConv.root.messages[message.messageId] = {
-                  id: message.messageId,
-                  role: 'user',
-                  message: prompt,
-                  parent: conv.latestId,
-                  children: [awnser.messageId]
-                }
-
-                newConv.root.messages[awnser.messageId] = {
+                const temp = {
                   id: awnser.messageId,
                   message: (awnser.adaptiveCards[0].body[0] as any).text,
                   role: 'model',
                   parent: message.messageId,
-                  invocationId: invocationId + 1
-                }
+                } as const
 
-                resolve(newConv)
+                await this.saveMsg([
+                  {
+                    id: message.messageId,
+                    role: 'user',
+                    message: prompt,
+                    parent: conv.latestId,
+                    children: [awnser.messageId]
+                  },
+                  temp
+                ], conv.id)
+
+                conv.invocationId++
+                conv.latestId = awnser.messageId
+                conv.messages.push(message.messageId, awnser.messageId)
+                await this.saveConv(conv)
+
+                resolve(temp)
                 ws.close()
                 dispose()
               }
             }
-          } catch(e) {
+          } catch (e) {
             reject(e)
             ws.close()
             dispose()
@@ -227,13 +214,8 @@ class BingService extends LLMService {
     })
   }
 
-  async clear(id: string): Promise<void> {
-  }
 
-  async create(options?: ConvOption): Promise<BingConversation> {
-    const { model = 'balanced', expire } = options ?? {}
-    const cookie = await this.ctx.cache('default').get('bingai/cookies')
-
+  async create(cookie: string, model = 'balanced'): Promise<Conversation> {
     const data = await this.http.get('https://www.bing.com/turing/conversation/create', {
       headers: { cookie }
     })
@@ -245,42 +227,87 @@ class BingService extends LLMService {
       default: throw new SessionError('error.llm.unknown')
     }
 
-    let conv = new BingConversation({
+    return {
       id: data.conversationId,
       convSig: data.conversationSignature,
       clientId: data.clientId,
-      model, expire
-    }, this)
+      traceId: uuid().replace(/\-/g, ''),
+      invocationId: 0,
+      messages: [],
+      model,
+    }
+  }
 
+}
+
+class BingInstance extends Instance {
+  constructor(ctx: Context, protected cookies: string) {
+    super(ctx, 'bing')
+  }
+
+  async queryConv(id: string): Promise<Conversation> {
+    const [conv] = await this.ctx.database.get('bing_ai_conversations', { id })
     return conv
   }
 
-  async query(id: string): Promise<BingConversation> {
-    return
+  async queryMsg(id: string): Promise<Message & { conversationId: string }> {
+    const [message] = await this.ctx.database.get('bing_ai_messages', { id })
+    return message
+  }
+
+  async ask(options: AskOptions): Promise<Message> {
+    const service = this.ctx.llm.get('bing') as BingService
+    const { prompt, conversationId, model, parent } = options
+    let conv: Conversation
+
+    if (conversationId) {
+      conv = await this.queryConv(conversationId)
+    } else if (parent) {
+      const message = await this.queryMsg(parent)
+      conv = await this.queryConv(message.conversationId)
+    } else {
+      conv = await service.create(this.cookies, model)
+    }
+
+    return service.ask(prompt, conv)
+  }
+
+  render(type: 'text', text: string): string
+  render(type: 'markdown', text: string): string
+  render(type: 'element', text: string): h[]
+  render(type: 'image', text: string): h
+  render(type: 'text' | 'markdown' | 'element' | 'image', text: string): string | h | h[] {
+    switch (type) {
+      case 'markdown': return text.replace(/\[\^\d+\^\]\[(\d+)\]/g, '[$1]')
+      // case 'markdown': return text.replace(/\[\^\d+\^\]\[(\d+)\]/g, '<sup>[$1]</sup>')
+      case 'image': return h('html', h('pre', text))
+      case 'element': return h('markdown', this.render('markdown', text))
+      case 'text':
+      default: return text
+    }
   }
 }
 
 namespace BingService {
-  export interface Config extends LLMConfig {
+  export interface Config {
     usingPuppeteer?: boolean
     cookies?: string
   }
 
   export const Config: Schema<Config> = Schema.intersect([
-    LLMConfig,
     Schema.object({
-      usingPuppeteer: Schema.boolean().default(true).description('是否使用puppeteer来获取cookies？'),
+      usingPuppeteer: Schema.boolean().default(false).description('是否使用puppeteer来获取cookies？'),
     }),
     Schema.union([
       Schema.object({
-        usingPuppeteer: Schema.const(false).required(),
+        usingPuppeteer: Schema.const(false),
         cookies: Schema.string().description('cookies').role('textarea'),
       }),
       Schema.object({}),
     ]),
   ])
 
-  export const using = ['__cache__']
+  export const using = ['database', 'llm']
 }
 
 export default BingService
