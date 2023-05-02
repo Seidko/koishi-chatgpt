@@ -114,7 +114,7 @@ class LLMCoreService extends Service {
     ctx.database.extend('gpt_messages', {
       conversationId: {
         type: 'char',
-        length: 128,
+        length: 256,
       },
       children: 'list',
       id: {
