@@ -138,12 +138,17 @@ class BingService extends LLMService {
           version: 1,
         }))
 
-        await new Promise(resolve => ws.once('message', resolve))
+        const { model } = conv
+        let options: Argument
+        if (model === 'balanced') options = require('./balanced')
+        else if (model === 'creative') options = require('./creative')
+        else if (model === 'precise') options = require('./precise')
+        else {
+          reject(new Error('Invalid Model.'))
+          ws.close()
+          return
+        }
 
-        ws.send(this.serial({ type: 6 }))
-        const dispose = this.ctx.setInterval(() => ws.send(this.serial({ type: 6 })), 20 * Time.second)
-
-        const options: Argument = require('./precise')
         options.arguments[0].traceId = conv.traceId
         options.arguments[0].message.timestamp = new Date().toISOString()
         options.arguments[0].message.text = prompt

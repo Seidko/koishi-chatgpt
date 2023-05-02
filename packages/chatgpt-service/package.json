@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "uuid": "^9.0.0",
-    "@seidko/llm-core": "^0.5.2"
+    "@seidko/koishi-plugin-gpt": "^0.5.2"
   },
   "koishi": {
     "description": {
