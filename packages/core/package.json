@@ -1,7 +1,7 @@
 {
-  "name": "@seidko/llm-core",
+  "name": "@seidko/koishi-plugin-gpt",
   "description": "Unify koishi GPT service",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -31,7 +31,17 @@
     "atsc": "^1.2.2"
   },
   "peerDependencies": {
-    "koishi": "^4.12.0",
-    "@koishijs/cache": "^0.1.4"
+    "koishi": "^4.12.0"
+  },
+  "koishi": {
+    "description": {
+      "en": "Koishi unify GPT service.",
+      "zh": "Koishi 统一 GPT 服务"
+    },
+    "service": {
+      "implements": [
+        "llm"
+      ]
+    }
   }
 }
