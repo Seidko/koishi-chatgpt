@@ -5,6 +5,12 @@ declare module 'koishi' {
   interface Context {
     llm: LLMCoreService
   }
+
+  interface Tables {
+    gpt_conversaion: Conversation
+    gpt_messages: Message & { conversationId: string }
+  }
+
 }
 
 const logger = new Logger('llm')
@@ -14,6 +20,7 @@ export interface AskOptions {
   parent?: string
   conversationId?: string
   model?: string
+  action?: 'next' | 'variant' | 'continue'
 }
 
 export interface Message {
@@ -25,22 +32,29 @@ export interface Message {
 }
 
 export interface Conversation {
-  id?: string
-  model?: string
-  expire?: Date
+  id: string
+  model: string
   latestId?: string
-  messages?: string[]
+  messages: string[]
 }
 
 export abstract class Instance {
   constructor(protected ctx: Context, public name: string) { }
   abstract ask(option: AskOptions): Promise<Message>
-  abstract queryMsg(messageId: string): Promise<Message>
-  abstract queryConv(conversationId: string): Promise<Conversation>
   abstract render(type: 'text', text: string): string
   abstract render(type: 'markdown', text: string): string
   abstract render(type: 'element', text: string): h[]
   abstract render(type: 'image', text: string): h
+
+  async queryConv(id: string): Promise<Conversation> {
+    const [conv] = await this.ctx.database.get('gpt_conversaion', { id })
+    return conv
+  }
+
+  async queryMsg(id: string): Promise<Message & { conversationId: string }> {
+    const [message] = await this.ctx.database.get('gpt_messages', { id })
+    return message
+  }
 }
 
 export abstract class LLMService {
@@ -59,7 +73,22 @@ export abstract class LLMService {
     })
   }
 
-  abstract instance(model?: string): Promise<Instance>
+  abstract instance(): Promise<Instance>
+
+  async saveConv(conv: Conversation) {
+    await this.ctx.database.upsert('gpt_conversaion', [conv])
+  }
+
+  protected async saveMsg(messages: Message[] | Message, convId: string) {
+    if (!Array.isArray(messages)) messages = [messages]
+    await this.ctx.database.upsert(
+      'gpt_messages',
+      messages.map((v: Message & { conversationId: string }) => {
+        v.conversationId = convId
+        return v
+      })
+    )
+  }
 }
 
 class LLMCoreService extends Service {
@@ -69,6 +98,39 @@ class LLMCoreService extends Service {
     ctx.i18n.define('zh', require('./locales/zh-CN'))
     super(ctx, 'llm')
     this.registry = new Map()
+    ctx.database.extend('gpt_conversaion', {
+      id: {
+        type: 'char',
+        length: 256,
+        nullable: false,
+      },
+      latestId: 'char',
+      model: 'string',
+      messages: 'list',
+    }, {
+      autoInc: false,
+    })
+
+    ctx.database.extend('gpt_messages', {
+      conversationId: {
+        type: 'char',
+        length: 128,
+      },
+      children: 'list',
+      id: {
+        type: 'char',
+        length: 36,
+        nullable: false,
+      },
+      message: 'text',
+      parent: {
+        type: 'char',
+        length: 36,
+      },
+      role: 'string',
+    }, {
+      autoInc: false,
+    })
   }
 
   get(service: string) {
@@ -84,13 +146,15 @@ class LLMCoreService extends Service {
     return () => this.registry.delete(name)
   }
 
-  create(service: string, model?: string): Promise<Instance> {
+  create(service: string): Promise<Instance> {
     const serv = this.registry.get(service)
-    return serv.instance(model)
+    return serv.instance()
   }
 }
 
 namespace LLMCoreService {
+  export const using = ['database'] as const
+
   export const Config = Schema.intersect([
     Schema.object({})
   ])
