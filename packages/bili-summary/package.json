@@ -1,0 +1,51 @@
+{
+  "name": "@seidko/koishi-plugin-bili-summary",
+  "description": "tl;dr for bili video!",
+  "version": "0.0.1",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "author": "Seidko <seidko.coding@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Seidko/koishi-chatgpt.git",
+    "directory": "packages/bili-summary"
+  },
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/Seidko/koishi-chatgpt/issues"
+  },
+  "scripts": {
+    "build": "atsc -b"
+  },
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "chatgpt",
+    "gpt",
+    "ai"
+  ],
+  "devDependencies": {
+    "@seidko/koishi-plugin-gpt": "^0.7.0",
+    "atsc": "^1.2.2"
+  },
+  "peerDependencies": {
+    "koishi": "^4.12.0"
+  },
+  "koishi": {
+    "description": {
+      "en": "tl;dr for bili video!",
+      "zh": "啥视频？太长不看！"
+    },
+    "service": {
+      "required": [
+        "llm",
+        "cache"
+      ]
+    }
+  }
+}
